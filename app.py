@@ -116,21 +116,48 @@ def _parse_md_table(lines, cell_style, header_style):
     return tbl
 
 
+def _split_sections(text: str) -> dict:
+    """
+    Split full Claude output into named sections.
+    Handles any heading level (#/##/###) with or without numbering.
+    Returns dict: { 'TAILORED RESUME': '...', 'GAP ANALYSIS': '...', ... }
+    """
+    # Match any heading line: # / ## / ### optionally followed by a number
+    heading_re = re.compile(r"^(#{1,3})\s+(?:\d+[\.\:]?\s*)?(.+)$", re.MULTILINE)
+    sections = {}
+    matches  = list(heading_re.finditer(text))
+
+    for idx, m in enumerate(matches):
+        title = m.group(2).strip().upper()
+        start = m.end()
+        end   = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        sections[title] = text[start:end].strip()
+
+    return sections
+
+
 def _extract_section(text: str, keyword: str) -> str:
-    """Extract a named ### section from the full report markdown."""
-    # Try to find ### 1. TAILORED RESUME or ### TAILORED RESUME etc.
-    pattern = re.compile(
-        r"(###\s+\d*\.?\s*" + re.escape(keyword) + r".*?)(?=\n###\s+\d*\.?\s+|\Z)",
-        re.IGNORECASE | re.DOTALL
-    )
-    m = pattern.search(text)
-    if m:
-        return m.group(1).strip()
-    # Fallback: split on ### and match
-    for chunk in text.split("### "):
-        if keyword.upper() in chunk[:40].upper():
-            return "### " + chunk.strip()
+    """Return content of the section whose heading contains keyword."""
+    sections = _split_sections(text)
+    keyword_up = keyword.upper()
+    for title, content in sections.items():
+        if keyword_up in title:
+            return content
     return ""
+
+
+def _exclude_section(text: str, keyword: str) -> str:
+    """Return full text with the section matching keyword removed."""
+    heading_re = re.compile(r"^(#{1,3})\s+(?:\d+[\.\:]?\s*)?(.+)$", re.MULTILINE)
+    matches = list(heading_re.finditer(text))
+    keyword_up = keyword.upper()
+
+    for idx, m in enumerate(matches):
+        if keyword_up in m.group(2).strip().upper():
+            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+            return (text[:m.start()] + text[end:]).strip()
+
+    return text
 
 
 # ── FULL ANALYSIS REPORT PDF (sections 2-4 only) ─────────────────────────────
@@ -189,10 +216,10 @@ def generate_report_pdf(markdown_text: str, target_role: str = "") -> bytes:
     ))
     story.append(Spacer(1, 4))
 
-    # Parse markdown — skip section 1 (TAILORED RESUME)
-    lines = markdown_text.split("\n")
+    # Strip the tailored resume section entirely before parsing
+    clean_text = _exclude_section(markdown_text, "TAILORED RESUME")
+    lines = clean_text.split("\n")
     i = 0
-    skip_resume_section = False
 
     while i < len(lines):
         line = lines[i].rstrip()
@@ -201,18 +228,6 @@ def generate_report_pdf(markdown_text: str, target_role: str = "") -> bytes:
         if re.match(r"^#\s+RESUME TAILOR REPORT", line, re.IGNORECASE):
             i += 1; continue
         if re.match(r"^##\s+(Target Role|Generated):", line):
-            i += 1; continue
-
-        # Enter skip mode at "### 1. TAILORED RESUME"
-        if re.match(r"^###\s+1[\.\:]?\s+TAILORED RESUME", line, re.IGNORECASE):
-            skip_resume_section = True
-            i += 1; continue
-
-        # Exit skip mode when we hit "### 2." or later
-        if skip_resume_section and re.match(r"^###\s+[2-9]", line):
-            skip_resume_section = False
-
-        if skip_resume_section:
             i += 1; continue
 
         # --- Render remaining content ---
@@ -535,7 +550,7 @@ if "result" in st.session_state:
     # ── Generate PDFs (cached in session so re-renders don't re-generate) ─────
     if "resume_pdf" not in st.session_state or st.session_state.get("pdf_role") != safe_role:
         st.session_state["resume_pdf"] = generate_resume_pdf(
-            resume_section if resume_section else result,
+            resume_section or result,
             target_role
         )
         st.session_state["report_pdf"] = generate_report_pdf(result, target_role)
