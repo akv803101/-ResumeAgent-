@@ -37,7 +37,31 @@ Show your calculation: (0.5 × keyword%) + (0.2 × skills%) + (0.15 × summary) 
 ## Generated: [Date]
 
 ### 1. TAILORED RESUME
-[Full resume text with rewritten bullets and selected summary]
+Output the resume in this EXACT clean format (no commentary, no analysis, no labels like "Here is your resume"):
+
+**[CANDIDATE FULL NAME]**
+[email] | [phone] | [LinkedIn or location] (copy verbatim from original resume)
+
+**PROFESSIONAL SUMMARY**
+[Recommended summary — 60 words max]
+
+**EXPERIENCE**
+
+**[Company Name]** — [Job Title] | [Month Year] – [Month Year or Present]
+- [Rewritten bullet using STAR-K]
+- [Rewritten bullet using STAR-K]
+
+**[Company Name]** — [Job Title] | [Month Year] – [Month Year]
+- [Rewritten bullet]
+
+**EDUCATION**
+**[School Name]** — [Degree] | [Year]
+
+**SKILLS**
+Technical: [comma-separated list]
+Tools: [comma-separated list]
+
+(Include only sections that exist in the original resume. Do NOT add sections that weren't there.)
 
 ### 2. GAP ANALYSIS
 [Match matrix + gap summary + strategies for each gap]
