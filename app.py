@@ -276,24 +276,24 @@ def generate_report_pdf(markdown_text: str, target_role: str = "") -> bytes:
     return buffer.getvalue()
 
 
-# ── TAILORED RESUME PDF (clean, aesthetic, submission-ready) ──────────────────
+# ── TAILORED RESUME PDF (clean, submission-ready) ────────────────────────────
 def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
     """
-    A true resume PDF — looks like an actual professional resume document.
-    Clean sections, company/date alignment, STAR-K bullets. No analysis content.
+    Renders the tailored resume as a clean, professional PDF.
+    Handles any markdown format Claude returns.
     """
     buffer = io.BytesIO()
+    W = letter[0] - 1.5 * inch   # 7.0 inch usable width
+
     doc = SimpleDocTemplate(
         buffer, pagesize=letter,
         rightMargin=0.75*inch, leftMargin=0.75*inch,
         topMargin=0.65*inch,   bottomMargin=0.65*inch,
     )
 
-    W     = letter[0] - 1.5 * inch   # 7.0 inch usable width
     NAVY  = colors.HexColor("#0f172a")
     BLUE  = colors.HexColor("#4361ee")
     GREY  = colors.HexColor("#64748b")
-    LGREY = colors.HexColor("#f1f5f9")
     BLACK = colors.HexColor("#1e293b")
     WHITE = colors.white
 
@@ -302,22 +302,24 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         return ParagraphStyle(name, fontName=font, fontSize=size, leading=leading,
                               textColor=color, alignment=align, **kw)
 
-    NAME_S    = ps("RN",  "Helvetica-Bold", 24, 28, NAVY,  TA_CENTER)
-    CONTACT_S = ps("RC",  "Helvetica",       9, 13, GREY,  TA_CENTER, spaceAfter=2)
-    SEC_S     = ps("RS",  "Helvetica-Bold", 9.5,13, WHITE, TA_LEFT)
-    CO_S      = ps("RCO", "Helvetica-Bold",10.5,14, NAVY)
-    DATE_S    = ps("RD",  "Helvetica",       9, 13, GREY,  TA_RIGHT)
+    NAME_S    = ps("RN",  "Helvetica-Bold", 22, 26, NAVY, TA_CENTER)
+    CONTACT_S = ps("RC",  "Helvetica",       9, 13, GREY, TA_CENTER, spaceAfter=2)
+    SEC_S     = ps("RS",  "Helvetica-Bold", 9.5, 13, WHITE, TA_LEFT)
+    CO_S      = ps("RCO", "Helvetica-Bold", 10.5, 14, NAVY)
+    DATE_S    = ps("RD",  "Helvetica",       9, 13, GREY, TA_RIGHT)
     TITLE_S   = ps("RT",  "Helvetica-BoldOblique", 9.5, 13, BLUE, spaceAfter=2)
-    BULLET_S  = ps("RB",  "Helvetica",       9.5,14, BLACK,
-                   leftIndent=14, firstLineIndent=-8, spaceAfter=2)
-    BODY_S    = ps("RBD", "Helvetica",       9.5,14, BLACK, spaceAfter=3)
-    NOTE_S    = ps("RFT", "Helvetica",       7.5,11, GREY,  TA_CENTER)
+    BULLET_S  = ps("RB",  "Helvetica", 9.5, 14, BLACK, leftIndent=14, firstLineIndent=-8, spaceAfter=2)
+    BODY_S    = ps("BD",  "Helvetica", 9.5, 14, BLACK, spaceAfter=3)
+    NOTE_S    = ps("RFT", "Helvetica", 7.5, 11, GREY,  TA_CENTER)
+
+    SECTION_KW = {"PROFESSIONAL", "EXPERIENCE", "EDUCATION", "SKILLS",
+                  "SUMMARY", "CERTIFICATIONS", "PROJECTS", "AWARDS",
+                  "WORK", "TECHNICAL", "ADDITIONAL", "CORE", "COMPETENCIES"}
 
     def sec_hdr(title):
-        """Full-width blue banner section header — no nested table."""
         t = Table([[Paragraph(title.upper(), SEC_S)]], colWidths=[W])
         t.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), BLUE),
+            ("BACKGROUND",    (0,0), (-1,-1), BLUE),
             ("TOPPADDING",    (0,0), (-1,-1), 5),
             ("BOTTOMPADDING", (0,0), (-1,-1), 5),
             ("LEFTPADDING",   (0,0), (-1,-1), 8),
@@ -325,161 +327,144 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         ]))
         return t
 
-    def co_date_row(left_text, right_text):
-        """Company name left-aligned, date right-aligned on the same line."""
+    def co_date_row(left_txt, right_txt):
         t = Table(
-            [[Paragraph(_md_inline(left_text), CO_S),
-              Paragraph(_md_inline(right_text), DATE_S)]],
-            colWidths=[W * 0.70, W * 0.30]
+            [[Paragraph(_md_inline(left_txt), CO_S),
+              Paragraph(_md_inline(right_txt), DATE_S)]],
+            colWidths=[W * 0.68, W * 0.32]
         )
         t.setStyle(TableStyle([
-            ("VALIGN",         (0,0), (-1,-1), "BOTTOM"),
-            ("LEFTPADDING",    (0,0), (-1,-1), 0),
-            ("RIGHTPADDING",   (0,0), (-1,-1), 0),
-            ("TOPPADDING",     (0,0), (-1,-1), 0),
-            ("BOTTOMPADDING",  (0,0), (-1,-1), 0),
+            ("VALIGN",        (0,0), (-1,-1), "BOTTOM"),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+            ("TOPPADDING",    (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
         ]))
         return t
 
-    story = []
+    # ── Clean input: strip any section heading line ───────────────────────────
+    body = re.sub(r"(?m)^#{1,3}\s+(?:\d+[\.\:]?\s*)?TAILORED RESUME[^\n]*\n?",
+                  "", resume_section, flags=re.IGNORECASE).strip()
+    lines = body.split("\n")
 
-    # ── Strip the ### 1. TAILORED RESUME header ───────────────────────────────
-    text = re.sub(r"^###\s+\d*\.?\s*TAILORED RESUME[^\n]*\n?", "",
-                  resume_section, flags=re.IGNORECASE).strip()
-    lines = text.split("\n")
+    # ── Extract name and contact from first few lines ─────────────────────────
+    name, contact = "", ""
+    skip_indices  = set()
 
-    # ── Extract candidate name (first non-empty bold line or plain first line) ─
-    name = ""
-    contact = ""
-    name_line_idx = -1
-
-    for idx, raw in enumerate(lines[:8]):
-        stripped = raw.strip()
-        if not stripped:
+    for idx, raw in enumerate(lines[:6]):
+        s = raw.strip()
+        if not s:
             continue
-        # Bold name: **Name Here**
-        m = re.match(r"^\*\*([^*\|]+)\*\*\s*$", stripped)
-        if m and not re.match(r"^(PROFESSIONAL|EXPERIENCE|EDUCATION|SKILLS|SUMMARY)", m.group(1).upper()):
-            name = m.group(1).strip()
-            name_line_idx = idx
-            break
-        # Plain name line (Title Case, no special chars, short)
-        if (re.match(r"^[A-Z][a-z]+ [A-Z]", stripped)
-                and len(stripped) < 50
-                and "|" not in stripped
-                and "@" not in stripped
-                and not stripped.startswith("#")):
-            name = stripped
-            name_line_idx = idx
-            break
-
-    # Contact line: has | or @ and is close to the name
-    if name_line_idx >= 0:
-        for idx in range(name_line_idx + 1, min(name_line_idx + 4, len(lines))):
-            s = lines[idx].strip()
-            if ("|" in s or "@" in s) and not s.startswith("#") and not s.startswith("**"):
-                contact = re.sub(r"\*+", "", s).strip()
-                break
+        # Name: **First Last** OR plain "First Last" (title case, short, no special chars)
+        bold_m = re.match(r"^\*\*([^*|]+)\*\*\s*$", s)
+        plain_m = (re.match(r"^[A-Z][a-z]+(?: [A-Z][a-z]*)+$", s) and len(s) < 45)
+        if not name and (bold_m or plain_m):
+            candidate = bold_m.group(1).strip() if bold_m else s
+            # Reject if it looks like a section keyword
+            if not any(kw in candidate.upper() for kw in SECTION_KW):
+                name = candidate
+                skip_indices.add(idx)
+                continue
+        # Contact: line with | or @ and no markdown heading
+        if not contact and ("|" in s or "@" in s) and not s.startswith("#"):
+            contact = re.sub(r"\*+", "", s).strip()
+            skip_indices.add(idx)
 
     # ── Header block ─────────────────────────────────────────────────────────
+    story = []
     story.append(Paragraph(name or "Candidate", NAME_S))
     if contact:
         story.append(Paragraph(contact, CONTACT_S))
     story.append(HRFlowable(width=W, thickness=2.5, color=BLUE, spaceAfter=2))
     story.append(Paragraph(
-        f"ATS-Optimised \u00a0|\u00a0 {date.today().strftime('%B %d, %Y')}",
+        f"ATS-Optimised Resume \u00a0|\u00a0 {date.today().strftime('%B %d, %Y')}",
         NOTE_S
     ))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
 
-    # ── Parse and render body ─────────────────────────────────────────────────
-    i = 0
-    SECTION_WORDS = {"PROFESSIONAL", "EXPERIENCE", "EDUCATION", "SKILLS",
-                     "SUMMARY", "CERTIFICATIONS", "PROJECTS", "AWARDS",
-                     "WORK", "TECHNICAL", "ADDITIONAL"}
+    # ── Render body ───────────────────────────────────────────────────────────
+    for idx, raw in enumerate(lines):
+        if idx in skip_indices:
+            continue
 
-    while i < len(lines):
-        line = lines[i].rstrip()
-        stripped = line.strip()
+        s = raw.strip()
 
-        # Skip lines already used for the header block
-        if i <= name_line_idx + 3:
-            clean_s = re.sub(r"\*+", "", stripped)
-            if clean_s == name or clean_s == contact or not stripped:
-                i += 1; continue
-            # Also skip any "### TAILORED RESUME" leftovers
-            if re.match(r"^###?\s+\d*\.?\s*TAILORED RESUME", stripped, re.IGNORECASE):
-                i += 1; continue
-
-        # ── Section headers ── (## / ### heading OR bold ALL-CAPS)
-        is_heading = re.match(r"^##\s+", stripped) or re.match(r"^###\s+", stripped)
-        is_bold_caps = (re.match(r"^\*\*[A-Z][A-Z\s]+\*\*\s*$", stripped)
-                        and any(w in stripped.upper() for w in SECTION_WORDS))
-
-        if is_heading or is_bold_caps:
-            txt = re.sub(r"^#+\s*|\*+", "", stripped).strip()
+        # Markdown section heading (## or ###)
+        heading_m = re.match(r"^#{2,3}\s+(?:\d+[\.\:]?\s*)?(.+)$", s)
+        if heading_m:
+            txt = heading_m.group(1).strip()
             story.append(Spacer(1, 7))
             story.append(sec_hdr(txt))
-            story.append(Spacer(1, 5))
-            i += 1; continue
+            story.append(Spacer(1, 4))
+            continue
 
-        # ── Experience entry: **Company** — Job Title | Dates ─────────────────
-        if re.match(r"^\*\*[^*]+\*\*", stripped):
-            full = re.sub(r"\*+", "", stripped)
-            # Try to split off a trailing date
-            date_pat = re.search(
+        # Bold all-caps or bold section keyword → section header
+        bold_all_m = re.match(r"^\*\*([^*]+)\*\*\s*$", s)
+        if bold_all_m:
+            inner = bold_all_m.group(1).strip()
+            if any(kw in inner.upper() for kw in SECTION_KW):
+                story.append(Spacer(1, 7))
+                story.append(sec_hdr(inner))
+                story.append(Spacer(1, 4))
+                continue
+            # Bold line with date → company + date row
+            date_m = re.search(
                 r"[\|—\-]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
-                r"|20\d\d|Present)[^|]*)$",
-                full, re.IGNORECASE
+                r"|20\d\d|Present)[^\|]*)",
+                inner, re.IGNORECASE
             )
-            if date_pat:
-                right = date_pat.group(1).strip()
-                left  = full[:date_pat.start()].strip().rstrip("|—- ")
+            if date_m:
+                right = date_m.group(1).strip()
+                left  = inner[:date_m.start()].strip().rstrip("|—- ")
                 story.append(Spacer(1, 6))
                 story.append(co_date_row(left, right))
-            else:
-                story.append(Spacer(1, 5))
-                story.append(Paragraph(_md_inline(stripped), CO_S))
-            i += 1; continue
+                continue
+            # Plain bold line (company name, role, etc.)
+            story.append(Spacer(1, 5))
+            story.append(Paragraph(_md_inline(s), CO_S))
+            continue
 
-        # ── Italic job title ──────────────────────────────────────────────────
-        if (stripped.startswith("*") and stripped.endswith("*")
-                and not stripped.startswith("**") and len(stripped) > 2):
-            story.append(Paragraph(_md_inline(stripped[1:-1]), TITLE_S))
-            i += 1; continue
+        # Bold text inline (not standalone) → body paragraph
+        if s.startswith("**") and "**" in s[2:]:
+            story.append(Paragraph(_md_inline(s), BODY_S))
+            continue
 
-        # ── Bullets ───────────────────────────────────────────────────────────
-        if stripped.startswith("- ") or stripped.startswith("• "):
-            story.append(Paragraph("\u2013 " + _md_inline(stripped[2:].strip()), BULLET_S))
-            i += 1; continue
+        # Italic standalone → job title
+        if re.match(r"^\*[^*].+[^*]\*$", s):
+            story.append(Paragraph(_md_inline(s[1:-1]), TITLE_S))
+            continue
 
-        # ── Numbered items ────────────────────────────────────────────────────
-        if re.match(r"^\d+\.\s", stripped):
-            num = re.match(r"^(\d+)\.", stripped).group(1)
+        # Bullet
+        if s.startswith("- ") or s.startswith("* "):
+            story.append(Paragraph("\u2013 " + _md_inline(s[2:].strip()), BULLET_S))
+            continue
+
+        # Numbered list
+        if re.match(r"^\d+\.\s", s):
+            num = re.match(r"^(\d+)\.", s).group(1)
             story.append(Paragraph(
-                f"{num}. " + _md_inline(re.sub(r"^\d+\.\s*", "", stripped).strip()),
+                f"{num}. " + _md_inline(re.sub(r"^\d+\.\s*", "", s).strip()),
                 BULLET_S))
-            i += 1; continue
+            continue
 
-        # ── HR rule ───────────────────────────────────────────────────────────
-        if stripped in ("---", "***", "___"):
+        # HR
+        if s in ("---", "***", "___"):
             story.append(HRFlowable(width=W, thickness=0.4,
                                     color=colors.HexColor("#e2e8f0"), spaceAfter=3))
-            i += 1; continue
+            continue
 
-        # ── Skills / body lines ───────────────────────────────────────────────
-        if stripped:
-            story.append(Paragraph(_md_inline(stripped), BODY_S))
+        # Non-empty body
+        if s:
+            story.append(Paragraph(_md_inline(s), BODY_S))
         else:
-            story.append(Spacer(1, 2))
-        i += 1
+            story.append(Spacer(1, 3))
 
     # ── Footer ────────────────────────────────────────────────────────────────
     story.append(Spacer(1, 14))
     story.append(HRFlowable(width=W, thickness=0.5,
                             color=colors.HexColor("#e2e8f0"), spaceAfter=4))
     story.append(Paragraph(
-        "ATS-Optimised by Resume Tailor Agent \u00a0|\u00a0 github.com/akv803101/resume-tailor-agent",
+        "ATS-Optimised by Resume Tailor Agent \u00a0|\u00a0 github.com/akv803101/-ResumeAgent-",
         NOTE_S
     ))
 
