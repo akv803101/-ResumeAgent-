@@ -522,65 +522,59 @@ if run:
 
 # ── Results ───────────────────────────────────────────────────────────────────
 if "result" in st.session_state:
-    result = st.session_state["result"]
+    result     = st.session_state["result"]
     jd_snippet = st.session_state.get("jd_snippet", "")
 
-    st.success("✅ Done! Your tailored resume package is ready.")
-    st.markdown("---")
-
-    # ── Tabs ──────────────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📝 Tailored Resume", "🔍 Gap Analysis", "📊 ATS Score", "📄 Full Report"
-    ])
-
-    resume_section  = _extract_section(result, "TAILORED RESUME")
-    gap_section     = _extract_section(result, "GAP ANALYSIS")
-    ats_section     = _extract_section(result, "ATS SCORECARD")
-    next_section    = _extract_section(result, "NEXT STEPS")
-
-    with tab1:
-        st.markdown(resume_section if resume_section else result)
-    with tab2:
-        st.markdown(gap_section if gap_section else "*Gap analysis not found in output.*")
-    with tab3:
-        st.markdown(ats_section if ats_section else "*ATS scorecard not found in output.*")
-    with tab4:
-        st.markdown(result)
-
     # ── Extract metadata ──────────────────────────────────────────────────────
-    role_match   = re.search(r"Target Role:\s*(.+)", result)
-    target_role  = role_match.group(1).strip() if role_match else jd_snippet
-    safe_role    = re.sub(r"[^\w\s-]", "", target_role)[:40].strip().replace(" ", "_")
+    role_match  = re.search(r"Target Role:\s*(.+)", result)
+    target_role = role_match.group(1).strip() if role_match else jd_snippet
+    safe_role   = re.sub(r"[^\w\s-]", "", target_role)[:40].strip().replace(" ", "_")
 
-    # ── Download section ──────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 📥 Download")
+    resume_section = _extract_section(result, "TAILORED RESUME")
 
-    dl1, dl2 = st.columns(2)
-
-    with dl1:
-        st.markdown('<p class="dl-label">📄 Clean resume only — ready to submit to employers</p>', unsafe_allow_html=True)
-        resume_pdf = generate_resume_pdf(
+    # ── Generate PDFs (cached in session so re-renders don't re-generate) ─────
+    if "resume_pdf" not in st.session_state or st.session_state.get("pdf_role") != safe_role:
+        st.session_state["resume_pdf"] = generate_resume_pdf(
             resume_section if resume_section else result,
             target_role
         )
+        st.session_state["report_pdf"] = generate_report_pdf(result, target_role)
+        st.session_state["pdf_role"]   = safe_role
+
+    resume_pdf = st.session_state["resume_pdf"]
+    report_pdf = st.session_state["report_pdf"]
+
+    # ── Success + download buttons (left column only, no tabs, no text output) ─
+    left_col, _ = st.columns([1, 1])
+    with left_col:
+        st.success("✅ Done! Your tailored resume package is ready.")
+        st.markdown("#### 📥 Download")
+
+        st.markdown(
+            '<p class="dl-label">📄 Clean resume — ready to submit to employers</p>',
+            unsafe_allow_html=True
+        )
         st.download_button(
-            label="⬇️ Tailored Resume (Final)",
+            label="⬇️  Tailored Resume PDF",
             data=resume_pdf,
             file_name=f"resume_{safe_role}.pdf" if safe_role else "resume_tailored.pdf",
             mime="application/pdf",
             type="primary",
+            use_container_width=True,
             key="dl_resume"
         )
 
-    with dl2:
-        st.markdown('<p class="dl-label">📋 Full analysis — gap matrix + ATS scorecard + next steps</p>',
-                    unsafe_allow_html=True)
-        report_pdf = generate_report_pdf(result, target_role)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown(
+            '<p class="dl-label">📋 Gap analysis · ATS scorecard · next steps</p>',
+            unsafe_allow_html=True
+        )
         st.download_button(
-            label="⬇️ Full Analysis Report",
+            label="⬇️  Full Analysis Report PDF",
             data=report_pdf,
             file_name=f"report_{safe_role}.pdf" if safe_role else "report_analysis.pdf",
             mime="application/pdf",
+            use_container_width=True,
             key="dl_report"
         )
