@@ -1,0 +1,29 @@
+ALEX JOHNSON
+alex.johnson@email.com | linkedin.com/in/alexjohnson | New York, NY
+
+PROFESSIONAL SUMMARY
+Data analyst with 5 years of experience working with large datasets and building dashboards. Passionate about using data to solve business problems.
+
+EXPERIENCE
+
+Acme Corp — Data Analyst (Jan 2021 – Present)
+- Built dashboards for the marketing team to track performance
+- Worked with SQL to pull data from various sources
+- Helped the marketing team understand customer behavior
+- Created reports for senior leadership on a weekly basis
+- Assisted with A/B testing for email campaigns
+
+DataCo — Junior Data Analyst (Jun 2019 – Dec 2020)
+- Used Python to analyze customer data
+- Built reports in Excel and PowerPoint
+- Helped the product team with data requests
+- Worked on customer segmentation projects
+
+EDUCATION
+B.S. Computer Science — State University (2019)
+
+SKILLS
+Python, SQL, Excel, Tableau, PowerPoint, pandas, numpy, data visualization, statistics
+
+CERTIFICATIONS
+Google Data Analytics Certificate (2021)

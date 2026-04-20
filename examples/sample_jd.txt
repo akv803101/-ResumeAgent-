@@ -1,0 +1,33 @@
+Senior Data Analyst — D2C Growth Team
+Company: BrandCo | Location: Remote (US) | Full-Time
+
+About the Role
+BrandCo is a fast-growing D2C brand doing $200M+ in annual revenue. We're looking for a Senior Data Analyst to join our Growth team and help us make smarter decisions across acquisition, retention, and LTV optimization.
+
+Responsibilities
+- Build and maintain dashboards and reports that track core growth KPIs (CAC, LTV, churn, ROAS)
+- Partner with Marketing, Product, and Finance teams to provide data-driven recommendations
+- Design and analyze A/B tests across email, paid media, and on-site experiences
+- Develop predictive models for customer segmentation and churn prediction
+- Own the data pipeline for marketing attribution from raw event data to insight
+
+Required Skills
+- 4+ years of experience in data analytics or data science
+- Advanced SQL (window functions, CTEs, query optimization)
+- Python (pandas, numpy, scikit-learn) — 3+ years
+- Experience with a cloud data warehouse (Snowflake preferred)
+- Proficiency in BI tools (Looker, Tableau, or Power BI)
+- Experience with A/B testing and statistical significance
+- Strong stakeholder communication and presentation skills
+
+Preferred Skills
+- Experience with dbt for data transformation
+- Familiarity with Airflow or similar pipeline orchestration
+- D2C or e-commerce domain experience
+- Experience with Shopify or similar e-commerce platforms
+
+What We Offer
+- Competitive salary ($130,000–$160,000)
+- Remote-first culture
+- Equity participation
+- Generous PTO + health benefits
