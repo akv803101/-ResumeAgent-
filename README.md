@@ -10,7 +10,7 @@
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF_Export-2D9CDB?style=for-the-badge)](https://www.reportlab.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
 
-**Paste a LinkedIn JD + your resume → get a tailored, ATS-scored resume downloaded as PDF**
+**Paste a LinkedIn JD + your resume → get two PDFs: a polished tailored resume + a full analysis report**
 
 [🚀 Quick Start](#-quick-start) · [🏗 Architecture](#-architecture) · [✨ Features](#-features) · [📸 Output](#-sample-output) · [☁️ Deploy](#️-deploy-to-streamlit-cloud)
 
@@ -26,10 +26,10 @@ This agent fixes that. You paste a job description and your current resume, and 
 
 | Output | What's Inside |
 |--------|--------------|
-| 📝 **Tailored Resume** | Every bullet rewritten with STAR-K formula + JD keywords |
+| 📝 **Tailored Resume PDF** | Two-column professional layout — name/avatar header, experience left, skills/certs right |
 | 🔍 **Gap Analysis** | Match matrix showing what aligns, what's missing, what's transferable |
 | 📊 **ATS Scorecard** | Before vs. after score (typically 35% → 82%+) |
-| ⬇️ **PDF Download** | Styled, professional report ready to share |
+| ⬇️ **Two separate PDFs** | Resume PDF (submit-ready) + Full Analysis PDF (review & iterate) |
 
 ---
 
@@ -40,7 +40,9 @@ This agent fixes that. You paste a job description and your current resume, and 
 - **Honest gap analysis** — never fabricates experience; flags anything questionable with ⚠️
 - **3 professional summary variants** — Technical-heavy, Impact-heavy, Domain-heavy, auto-scored
 - **ATS compatibility scoring** — deterministic formula: `(0.5 × keyword%) + (0.2 × skills%) + (0.15 × summary) + (0.15 × format)`
-- **PDF export** — styled ReportLab PDF with tables, color headers, and keyword audit
+- **Two-column resume PDF** — professional layout with avatar, name header, experience left, skills/certs/education right, skill tag pills
+- **Separate analysis PDF** — gap matrix, ATS scorecard, and next steps as a standalone report
+- **Robust PDF engine** — handles any AI output format (markdown headings, bold headings, plain caps); never crashes with LayoutError
 - **~$0.03 per run** — ~7,000 tokens on Claude Sonnet
 
 ---
@@ -102,7 +104,7 @@ resume-tailor-agent/
 │   ├── sample_jd.txt          # Sample Senior Data Analyst JD
 │   ├── sample_resume.txt      # Sample generic resume
 │   └── sample_output.md       # Sample tailored report (before/after)
-├── app.py                     # Streamlit web app with PDF download
+├── app.py                     # Streamlit web app — two PDF downloads, no tabs
 ├── resume_agent.py            # CLI runner
 └── README.md
 ```
@@ -132,7 +134,11 @@ export ANTHROPIC_API_KEY=sk-ant-...
 streamlit run app.py
 ```
 
-Open **http://localhost:8501**, paste a JD + resume, and hit **Tailor My Resume**. Download the PDF report when done.
+Open **http://localhost:8501**, paste a JD + resume, and hit **Tailor My Resume**.
+
+Two download buttons appear in the left column:
+- **⬇️ Tailored Resume PDF** — clean two-column resume, ready to submit
+- **⬇️ Full Analysis Report PDF** — gap matrix, ATS scorecard, next steps
 
 ---
 
@@ -149,6 +155,28 @@ python resume_agent.py examples/sample_jd.txt examples/sample_resume.txt
 ---
 
 ## 📸 Sample Output
+
+### What You Download
+
+```
+┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+│   ⬇️ Tailored Resume PDF        │   │   ⬇️ Full Analysis Report PDF   │
+│─────────────────────────────────│   │─────────────────────────────────│
+│  [Avatar]  John Doe             │   │  2. GAP ANALYSIS                │
+│            Senior SWE @ Google  │   │  ┌──────┬─────────┬──────────┐  │
+│────────────────────────────────│   │  │Skill │ Resume  │ JD Gap   │  │
+│  SUMMARY  │  CERTIFICATIONS    │   │  ├──────┼─────────┼──────────┤  │
+│  ─────── │  ────────────────  │   │  │Python│ Strong  │ None     │  │
+│  [text]   │  [cert pills]      │   │  └──────┴─────────┴──────────┘  │
+│  EXPERIENCE│  SKILLS            │   │                                 │
+│  ─────────│  [tag] [tag] [tag] │   │  3. ATS SCORECARD               │
+│  ● bullet  │                    │   │  Before: 42/100 → After: 84/100 │
+│  ● bullet  │  EDUCATION         │   │                                 │
+│           │  University of X   │   │  4. NEXT STEPS                  │
+└─────────────────────────────────┘   │  ☐ Review bullets               │
+  Submit-ready. No commentary.        │  ☐ Fix formatting flags         │
+                                      └─────────────────────────────────┘
+```
 
 ### Before → After ATS Score
 
@@ -238,6 +266,24 @@ Get your API key: [console.anthropic.com](https://console.anthropic.com)
 | PDF Generation | ReportLab |
 | Language | Python 3.9+ |
 | Prompt Architecture | Multi-skill agent with sequential orchestration |
+
+---
+
+## 📋 Changelog
+
+### v1.2 — PDF Reliability & Layout Overhaul
+- **Two-column resume PDF** — professional layout with avatar initials circle, left column (summary + experience), right column (certs + achievements + skills as pill tags), vertical separator line
+- **Separate analysis PDF** — report PDF now contains only gap analysis, ATS scorecard, and next steps (no resume content duplication)
+- **Simplified UI** — removed all tabs and inline text output; replaced with two clean download buttons in the left column
+- **Fixed LayoutError crash** — wrapped both body columns in `KeepInFrame(mode='shrink')` so long resumes scale to fit rather than throwing a ReportLab error
+- **Robust section detection** — PDF parser now recognises all formats the AI may output: `**BOLD CAPS**`, `**Title Case**`, `## markdown headings`, `# single-hash headings`, and `PLAIN CAPS` section names
+- **Fixed blank resume output** — `_extract_section` now has a two-pass strategy: markdown headings first, bold-heading fallback second; section parser has a final flat-flow fallback if no sections are detected at all
+- **Fixed `HRFlowable` crash** — `---` separators inside table cells now render as `Spacer` to avoid `width="100%"` issues in nested ReportLab tables
+
+### v1.1 — Initial Release
+- 5-skill pipeline (jd_parser → gap_analyzer → bullet_rewriter → summary_generator → ats_scorer)
+- Streamlit web app with PDF download
+- CLI runner
 
 ---
 
