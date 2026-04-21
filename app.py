@@ -84,6 +84,9 @@ def _md_inline(text: str) -> str:
     text = re.sub(r"__(.+?)__", r"<b>\1</b>", text)
     text = re.sub(r"`(.+?)`", r'<font name="Courier" size="9">\1</font>', text)
     text = text.replace("⚠️", "⚠").replace("☑", "&#x2611;").replace("☐", "&#x2610;")
+    # Replace non-Latin-1 chars that Helvetica can't render
+    text = text.replace("\u2192", "->").replace("\u2190", "<-").replace("\u2013", "-").replace("\u2014", "--")
+    text = "".join(c if ord(c) < 256 else "?" for c in text)
     return text
 
 
@@ -280,8 +283,11 @@ def generate_report_pdf(markdown_text: str, target_role: str = "") -> bytes:
 # ── TAILORED RESUME PDF (two-column modern design) ───────────────────────────
 def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
     """
-    Renders the tailored resume as a two-column PDF with teal accents and
-    an initials avatar — matching the modern sidebar layout.
+    Two-column resume PDF.
+    Uses BaseDocTemplate + 3 Frames (header, left col, right col).
+    Avatar drawn via onFirstPage canvas callback — no custom Flowable needed.
+    All nested Tables are placed directly into Frames (not inside Table cells),
+    which is how ReportLab handles complex nested content correctly.
     """
     buffer = io.BytesIO()
 
@@ -291,14 +297,18 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
     BLACK = colors.HexColor("#1e293b")
     WHITE = colors.white
 
-    PAGE_W, PAGE_H = letter
+    PW, PH = letter
     LM = RM = 0.45 * inch
-    USABLE_W  = PAGE_W - LM - RM        # ~7.6 in
-    HEADER_H  = 1.3 * inch
-    BODY_H    = PAGE_H - 0.45*inch - HEADER_H - 0.15*inch - 0.45*inch
-    LEFT_W    = USABLE_W * 0.63
-    GAP_W     = 0.15 * inch
-    RIGHT_W   = USABLE_W - LEFT_W - GAP_W
+    TM = BM = 0.45 * inch
+    USABLE_W = PW - LM - RM          # 7.6 in
+    HEADER_H = 1.25 * inch
+    GAP      = 0.08 * inch           # gap between header bottom and body top
+    BODY_TOP = PH - TM - HEADER_H - GAP
+    BODY_H   = BODY_TOP - BM
+    LEFT_W   = USABLE_W * 0.63
+    COL_GAP  = 0.14 * inch
+    RIGHT_W  = USABLE_W - LEFT_W - COL_GAP
+    AVATAR_R = 22                    # radius in points
 
     SECTION_KW = {"PROFESSIONAL", "EXPERIENCE", "EDUCATION", "SKILLS",
                   "SUMMARY", "CERTIFICATIONS", "PROJECTS", "AWARDS",
@@ -310,16 +320,16 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         return ParagraphStyle(name, fontName=font, fontSize=size, leading=leading,
                               textColor=color, alignment=align, **kw)
 
-    name_s    = ps("RN",  "Helvetica-Bold",        20, 24, NAVY)
-    sub_s     = ps("RS",  "Helvetica",              9,  13, GREY, spaceAfter=1)
-    contact_s = ps("RC",  "Helvetica",              8,  12, GREY)
-    sec_s     = ps("SH",  "Helvetica-Bold",         9,  12, WHITE)
-    co_s      = ps("CO",  "Helvetica-Bold",        10,  14, TEAL)
-    role_s    = ps("RL",  "Helvetica-Oblique",      9,  12, GREY,  spaceAfter=1)
-    date_s    = ps("DT",  "Helvetica",              8,  11, GREY,  TA_RIGHT)
-    bullet_s  = ps("BL",  "Helvetica",              9,  13, BLACK, leftIndent=10, firstLineIndent=-6, spaceAfter=1)
-    body_s    = ps("BD",  "Helvetica",              9,  13, BLACK, spaceAfter=2)
-    note_s    = ps("FT",  "Helvetica",              7,  10, GREY,  TA_CENTER)
+    name_s    = ps("RN", "Helvetica-Bold",       20, 24, NAVY)
+    sub_s     = ps("RS", "Helvetica",             9,  13, GREY, spaceAfter=1)
+    contact_s = ps("RC", "Helvetica",             8,  12, GREY)
+    sec_s     = ps("SH", "Helvetica-Bold",        9,  12, WHITE)
+    co_s      = ps("CO", "Helvetica-Bold",       10,  14, TEAL)
+    role_s    = ps("RL", "Helvetica-Oblique",     9,  12, GREY, spaceAfter=1)
+    date_s    = ps("DT", "Helvetica",             8,  11, GREY, TA_RIGHT)
+    bullet_s  = ps("BL", "Helvetica",             9,  13, BLACK, leftIndent=10, firstLineIndent=-6, spaceAfter=1)
+    body_s    = ps("BD", "Helvetica",             9,  13, BLACK, spaceAfter=2)
+    note_s    = ps("FT", "Helvetica",             7,  10, GREY,  TA_CENTER)
 
     def sec_hdr(title, col_w):
         t = Table([[Paragraph(title.upper(), sec_s)]], colWidths=[col_w])
@@ -347,28 +357,11 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         ]))
         return t
 
-    # ── Avatar flowable ───────────────────────────────────────────────────────
-    class InitialsCircle(Flowable):
-        def __init__(self, initials, size=46):
-            super().__init__()
-            self.initials = initials
-            self.width = size
-            self.height = size
-            self._size = size
-        def draw(self):
-            r = self._size / 2
-            self.canv.setFillColor(TEAL)
-            self.canv.circle(r, r, r, fill=1, stroke=0)
-            self.canv.setFillColor(WHITE)
-            self.canv.setFont("Helvetica-Bold", self._size * 0.33)
-            self.canv.drawCentredString(r, r - self._size * 0.11, self.initials)
-
     # ── Parse markdown ────────────────────────────────────────────────────────
     body = re.sub(r"(?m)^#{1,3}\s+(?:\d+[\.\:]?\s*)?TAILORED RESUME[^\n]*\n?",
                   "", resume_section, flags=re.IGNORECASE).strip()
     lines = body.split("\n")
 
-    # Extract name, subtitle, contact
     name, subtitle, contact = "", "", ""
     skip = set()
     for idx, raw in enumerate(lines[:8]):
@@ -388,21 +381,20 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
 
     initials = "".join(w[0].upper() for w in name.split()[:2]) if name else "CV"
 
-    # ── Route sections to left / right columns ────────────────────────────────
+    # ── Route lines to left / right column stories ────────────────────────────
     LEFT_KW  = {"SUMMARY", "PROFESSIONAL", "EXPERIENCE", "WORK"}
     RIGHT_KW = {"CERTIFICATION", "SKILL", "EDUCATION", "PROJECT", "AWARD",
                 "KEY", "ACHIEVEMENT", "ADDITIONAL", "CORE", "TECHNICAL", "TOOLS", "COMPETENC"}
 
     left_story:  list = []
     right_story: list = []
-    current      = left_story   # default destination before first heading
+    current = left_story
 
     for idx, raw in enumerate(lines):
         if idx in skip:
             continue
         s = raw.strip()
 
-        # Section heading (## / ### or **KEYWORD**)
         hm       = re.match(r"^#{2,3}\s+(?:\d+[\.\:]?\s*)?(.+)$", s)
         bold_sec = re.match(r"^\*\*([^*]+)\*\*\s*$", s)
         heading_txt = None
@@ -423,7 +415,6 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
             current.append(Spacer(1, 4))
             continue
 
-        # Bold line (company + date, or plain company name)
         if bold_sec:
             inner  = bold_sec.group(1).strip()
             col_w  = LEFT_W if current is left_story else RIGHT_W
@@ -431,106 +422,79 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
                 r"[\|—\-]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
                 r"|20\d\d|Present)[^\|]*)", inner, re.IGNORECASE)
             if date_m:
-                right_txt = date_m.group(1).strip()
-                left_txt  = inner[:date_m.start()].strip().rstrip("|—- ")
                 current.append(Spacer(1, 5))
-                current.append(co_date_row(left_txt, right_txt, col_w))
+                current.append(co_date_row(
+                    inner[:date_m.start()].strip().rstrip("|—- "),
+                    date_m.group(1).strip(), col_w))
             else:
                 current.append(Spacer(1, 4))
                 current.append(Paragraph(_md_inline(s), co_s))
             continue
 
-        # Italic standalone → job title
         if re.match(r"^\*[^*].+[^*]\*$", s):
-            current.append(Paragraph(_md_inline(s[1:-1]), role_s))
-            continue
+            current.append(Paragraph(_md_inline(s[1:-1]), role_s)); continue
 
-        # Bold inline (not standalone)
         if s.startswith("**") and "**" in s[2:]:
-            current.append(Paragraph(_md_inline(s), body_s))
-            continue
+            current.append(Paragraph(_md_inline(s), body_s)); continue
 
-        # Bullet
         if s.startswith("- ") or s.startswith("* "):
-            current.append(Paragraph("\u2013 " + _md_inline(s[2:].strip()), bullet_s))
-            continue
+            current.append(Paragraph("- " + _md_inline(s[2:].strip()), bullet_s)); continue
 
-        # Numbered list
         if re.match(r"^\d+\.\s", s):
             num = re.match(r"^(\d+)\.", s).group(1)
             current.append(Paragraph(f"{num}. " + _md_inline(
-                re.sub(r"^\d+\.\s*", "", s).strip()), bullet_s))
-            continue
+                re.sub(r"^\d+\.\s*", "", s).strip()), bullet_s)); continue
 
-        # HR
         if s in ("---", "***", "___"):
             current.append(HRFlowable(width="100%", thickness=0.3,
-                                      color=colors.HexColor("#c8d8d8"), spaceAfter=2))
-            continue
-
+                                      color=colors.HexColor("#c8d8d8"), spaceAfter=2)); continue
         if s:
             current.append(Paragraph(_md_inline(s), body_s))
         else:
             current.append(Spacer(1, 3))
 
-    # ── Build document with three frames: header, left col, right col ─────────
-    hdr_frame = Frame(
-        LM, PAGE_H - 0.45*inch - HEADER_H,
-        USABLE_W, HEADER_H,
-        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-        showBoundary=0
-    )
-    left_frame = Frame(
-        LM, 0.45*inch,
-        LEFT_W, BODY_H,
-        leftPadding=0, rightPadding=4, topPadding=0, bottomPadding=0,
-        showBoundary=0
-    )
-    right_frame = Frame(
-        LM + LEFT_W + GAP_W, 0.45*inch,
-        RIGHT_W, BODY_H,
-        leftPadding=4, rightPadding=0, topPadding=0, bottomPadding=0,
-        showBoundary=0
-    )
+    # ── Build with BaseDocTemplate + 3 frames ────────────────────────────────
+    # Frame y coords are from bottom of page.
+    hdr_y    = PH - TM - HEADER_H
+    hdr_frame  = Frame(LM, hdr_y,      USABLE_W, HEADER_H, leftPadding=0, rightPadding=0,
+                       topPadding=0, bottomPadding=0, showBoundary=0)
+    left_frame = Frame(LM, BM,         LEFT_W,   BODY_H,   leftPadding=0, rightPadding=4,
+                       topPadding=0, bottomPadding=0, showBoundary=0)
+    right_frame= Frame(LM+LEFT_W+COL_GAP, BM, RIGHT_W, BODY_H, leftPadding=4, rightPadding=0,
+                       topPadding=0, bottomPadding=0, showBoundary=0)
+
+    # Avatar drawn directly on canvas — avoids Flowable-in-Table-cell issues
+    def _draw_avatar(canvas, doc):
+        ax = PW - RM - AVATAR_R
+        ay = PH - TM - HEADER_H / 2
+        canvas.saveState()
+        canvas.setFillColor(TEAL)
+        canvas.circle(ax, ay, AVATAR_R, fill=1, stroke=0)
+        canvas.setFillColor(WHITE)
+        canvas.setFont("Helvetica-Bold", int(AVATAR_R * 0.7))
+        canvas.drawCentredString(ax, ay - AVATAR_R * 0.22, initials)
+        canvas.restoreState()
 
     doc = BaseDocTemplate(
         buffer, pagesize=letter,
-        rightMargin=RM, leftMargin=LM,
-        topMargin=0.45*inch, bottomMargin=0.45*inch,
+        leftMargin=LM, rightMargin=RM, topMargin=TM, bottomMargin=BM,
     )
     doc.addPageTemplates([PageTemplate(
         id="main",
-        frames=[hdr_frame, left_frame, right_frame]
+        frames=[hdr_frame, left_frame, right_frame],
+        onPage=_draw_avatar,
     )])
 
-    # ── Header content ────────────────────────────────────────────────────────
-    name_block = [
-        Paragraph(name or "Candidate", name_s),
-        Paragraph(subtitle, sub_s) if subtitle else Spacer(1, 2),
-        Spacer(1, 3),
-        Paragraph(contact, contact_s) if contact else Spacer(1, 2),
-    ]
-    hdr_tbl = Table(
-        [[name_block, InitialsCircle(initials)]],
-        colWidths=[USABLE_W - 0.65*inch, 0.65*inch]
-    )
-    hdr_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-        ("ALIGN",         (1,0), (1,0),   "RIGHT"),
-        ("LEFTPADDING",   (0,0), (-1,-1), 0),
-        ("RIGHTPADDING",  (0,0), (-1,-1), 0),
-        ("TOPPADDING",    (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-    ]))
+    # Header story: plain Paragraphs only — no Tables, no lists-in-cells
+    hdr_story = [Paragraph(name or "Candidate", name_s)]
+    if subtitle:
+        hdr_story.append(Paragraph(subtitle, sub_s))
+    hdr_story.append(Spacer(1, 3))
+    if contact:
+        hdr_story.append(Paragraph(_md_inline(contact), contact_s))
+    hdr_story.append(HRFlowable(width=USABLE_W, thickness=2, color=TEAL, spaceAfter=4))
 
-    story = (
-        [hdr_tbl,
-         HRFlowable(width=USABLE_W, thickness=2, color=TEAL, spaceAfter=4),
-         FrameBreak()]
-        + left_story
-        + [FrameBreak()]
-        + right_story
-    )
+    story = hdr_story + [FrameBreak()] + left_story + [FrameBreak()] + right_story
 
     doc.build(story)
     return buffer.getvalue()
