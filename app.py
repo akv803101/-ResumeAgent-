@@ -129,30 +129,52 @@ def _parse_md_table(lines, cell_style, header_style):
 def _split_sections(text: str) -> dict:
     """
     Split full Claude output into named sections.
-    Handles any heading level (#/##/###) with or without numbering.
+    Uses markdown headings only (#/##/###) so that bold sub-headings
+    within a section (e.g. **Company Name**, **EXPERIENCE**) are NOT
+    misidentified as top-level section separators.
     Returns dict: { 'TAILORED RESUME': '...', 'GAP ANALYSIS': '...', ... }
     """
-    # Match any heading line: # / ## / ### optionally followed by a number
     heading_re = re.compile(r"^(#{1,3})\s+(?:\d+[\.\:]?\s*)?(.+)$", re.MULTILINE)
     sections = {}
     matches  = list(heading_re.finditer(text))
-
     for idx, m in enumerate(matches):
-        title = m.group(2).strip().upper()
+        title = re.sub(r"\*+", "", m.group(2)).strip().upper()
         start = m.end()
         end   = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
         sections[title] = text[start:end].strip()
-
     return sections
 
 
 def _extract_section(text: str, keyword: str) -> str:
     """Return content of the section whose heading contains keyword."""
-    sections = _split_sections(text)
     keyword_up = keyword.upper()
+
+    # ── Pass 1: markdown headings ─────────────────────────────────────────────
+    sections = _split_sections(text)
     for title, content in sections.items():
-        if keyword_up in title:
+        if keyword_up in title and content:
             return content
+
+    # ── Pass 2: bold-style section headers (**N. Title** or **Title**)
+    #    Used when the AI formats sections with bold instead of # marks.
+    #    Delimit sections by lines that look like numbered bold headers or by
+    #    subsequent markdown headings.
+    bold_kw = re.compile(
+        r"^\*\*(?:\d+[\.\:]?\s*)?" + re.escape(keyword_up) + r"[^*\n]*\*\*\s*$",
+        re.MULTILINE | re.IGNORECASE,
+    )
+    m = bold_kw.search(text)
+    if m:
+        start = m.end()
+        # End at the next bold-numbered header or markdown heading
+        nxt = re.search(
+            r"(?:^\*\*\d+[\.\:]|^#{1,3}\s+)", text[start:], re.MULTILINE
+        )
+        end = start + nxt.start() if nxt else len(text)
+        content = text[start:end].strip()
+        if content:
+            return content
+
     return ""
 
 
@@ -534,10 +556,10 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
             skills_raw.setdefault(current, []).extend(
                 [v.strip() for v in vals.split(",") if v.strip()])
 
-        # Horizontal rule
+        # Horizontal rule / markdown separator — use Spacer to avoid "100%" width
+        # issues inside ReportLab Table cells
         elif s in ("---", "***", "___"):
-            fl.append(HRFlowable(width="100%", thickness=0.3,
-                                 color=MGREY, spaceAfter=2))
+            fl.append(Spacer(1, 4))
 
         # Body / description text
         elif s:
@@ -592,7 +614,16 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
                 left_fl.append(Paragraph(_md_inline(s), BODY_S))
 
     # ── Two-column body Table ─────────────────────────────────────────────────
-    body = Table([[left_fl, right_fl]], colWidths=[LW, RW])
+    # KeepInFrame(mode='shrink') prevents LayoutError if content exceeds one page:
+    # it scales the column down to fit rather than crashing.
+    # Estimated available column height = page height minus margins, header, footer.
+    _COL_H = letter[1] - 0.95 * inch - 1.6 * inch  # ~615 pt (conservative)
+    _l_safe = left_fl  if left_fl  else [Spacer(1, 1)]
+    _r_safe = right_fl if right_fl else [Spacer(1, 1)]
+    kif_l = KeepInFrame(L_INN, _COL_H, _l_safe, mode='shrink')
+    kif_r = KeepInFrame(R_INN, _COL_H, _r_safe, mode='shrink')
+
+    body = Table([[kif_l, kif_r]], colWidths=[LW, RW])
     body.setStyle(TableStyle([
         ("VALIGN",        (0,0), (-1,-1), "TOP"),
         ("LEFTPADDING",   (0,0), (-1,-1), 0),
