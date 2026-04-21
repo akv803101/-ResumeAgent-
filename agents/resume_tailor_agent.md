@@ -80,7 +80,7 @@ Tools: [comma-separated list]
 ## Constraints
 - Total output: structured Markdown, 1,500-2,500 words
 - Never fabricate skills, experience, or numbers
-- Do not add assumption labels or notes in the resume output
+- Never use words like "assumed", "estimated", "approximately", or symbols like "~" anywhere in the resume output — write numbers directly without qualifiers
 - If resume and JD have <30% keyword overlap, warn the user:
   "This role may be a significant stretch. Consider whether to apply."
 - Maintain the candidate's authentic voice — don't make a Python developer sound like a management consultant (unless they are one)

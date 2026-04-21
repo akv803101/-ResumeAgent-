@@ -37,8 +37,8 @@ Every bullet must follow: [Action Verb] + [What you did] + [Scale/scope] + [Resu
 ### Quantification Rules
 - Every bullet MUST have at least one number
 - Acceptable number types: revenue ($), percentage (%), count (N users), time (hours/days saved), scale (records, transactions)
-- If original has no numbers, add a reasonable estimate with "~" prefix
-- Example: "managed data pipelines" → "managed ~8 data pipelines processing ~2M records daily with 99.7% uptime"
+- If original has no numbers, infer a reasonable estimate from context and embed it directly — no markers, labels, or qualifiers like "~", "(assumed)", "(estimated)", or similar
+- Example: "managed data pipelines" → "managed 8 data pipelines processing 2M records daily with 99.7% uptime"
 
 ### Verb Upgrades (by seniority)
 - Junior: Built, Developed, Created, Analyzed, Automated
