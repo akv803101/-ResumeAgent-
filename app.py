@@ -10,8 +10,9 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, KeepTogether, PageBreak
+    SimpleDocTemplate, BaseDocTemplate, PageTemplate, Frame, FrameBreak,
+    Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, KeepTogether, PageBreak, Flowable
 )
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
@@ -276,62 +277,66 @@ def generate_report_pdf(markdown_text: str, target_role: str = "") -> bytes:
     return buffer.getvalue()
 
 
-# ── TAILORED RESUME PDF (clean, submission-ready) ────────────────────────────
+# ── TAILORED RESUME PDF (two-column modern design) ───────────────────────────
 def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
     """
-    Renders the tailored resume as a clean, professional PDF.
-    Handles any markdown format Claude returns.
+    Renders the tailored resume as a two-column PDF with teal accents and
+    an initials avatar — matching the modern sidebar layout.
     """
     buffer = io.BytesIO()
-    W = letter[0] - 1.5 * inch   # 7.0 inch usable width
 
-    doc = SimpleDocTemplate(
-        buffer, pagesize=letter,
-        rightMargin=0.75*inch, leftMargin=0.75*inch,
-        topMargin=0.65*inch,   bottomMargin=0.65*inch,
-    )
-
+    TEAL  = colors.HexColor("#1a6b6b")
     NAVY  = colors.HexColor("#0f172a")
-    BLUE  = colors.HexColor("#4361ee")
     GREY  = colors.HexColor("#64748b")
     BLACK = colors.HexColor("#1e293b")
     WHITE = colors.white
+
+    PAGE_W, PAGE_H = letter
+    LM = RM = 0.45 * inch
+    USABLE_W  = PAGE_W - LM - RM        # ~7.6 in
+    HEADER_H  = 1.3 * inch
+    BODY_H    = PAGE_H - 0.45*inch - HEADER_H - 0.15*inch - 0.45*inch
+    LEFT_W    = USABLE_W * 0.63
+    GAP_W     = 0.15 * inch
+    RIGHT_W   = USABLE_W - LEFT_W - GAP_W
+
+    SECTION_KW = {"PROFESSIONAL", "EXPERIENCE", "EDUCATION", "SKILLS",
+                  "SUMMARY", "CERTIFICATIONS", "PROJECTS", "AWARDS",
+                  "WORK", "TECHNICAL", "ADDITIONAL", "CORE", "COMPETENCIES",
+                  "KEY", "ACHIEVEMENT", "TOOLS"}
 
     def ps(name, font="Helvetica", size=10, leading=14,
            color=BLACK, align=TA_LEFT, **kw):
         return ParagraphStyle(name, fontName=font, fontSize=size, leading=leading,
                               textColor=color, alignment=align, **kw)
 
-    NAME_S    = ps("RN",  "Helvetica-Bold", 22, 26, NAVY, TA_CENTER)
-    CONTACT_S = ps("RC",  "Helvetica",       9, 13, GREY, TA_CENTER, spaceAfter=2)
-    SEC_S     = ps("RS",  "Helvetica-Bold", 9.5, 13, WHITE, TA_LEFT)
-    CO_S      = ps("RCO", "Helvetica-Bold", 10.5, 14, NAVY)
-    DATE_S    = ps("RD",  "Helvetica",       9, 13, GREY, TA_RIGHT)
-    TITLE_S   = ps("RT",  "Helvetica-BoldOblique", 9.5, 13, BLUE, spaceAfter=2)
-    BULLET_S  = ps("RB",  "Helvetica", 9.5, 14, BLACK, leftIndent=14, firstLineIndent=-8, spaceAfter=2)
-    BODY_S    = ps("BD",  "Helvetica", 9.5, 14, BLACK, spaceAfter=3)
-    NOTE_S    = ps("RFT", "Helvetica", 7.5, 11, GREY,  TA_CENTER)
+    name_s    = ps("RN",  "Helvetica-Bold",        20, 24, NAVY)
+    sub_s     = ps("RS",  "Helvetica",              9,  13, GREY, spaceAfter=1)
+    contact_s = ps("RC",  "Helvetica",              8,  12, GREY)
+    sec_s     = ps("SH",  "Helvetica-Bold",         9,  12, WHITE)
+    co_s      = ps("CO",  "Helvetica-Bold",        10,  14, TEAL)
+    role_s    = ps("RL",  "Helvetica-Oblique",      9,  12, GREY,  spaceAfter=1)
+    date_s    = ps("DT",  "Helvetica",              8,  11, GREY,  TA_RIGHT)
+    bullet_s  = ps("BL",  "Helvetica",              9,  13, BLACK, leftIndent=10, firstLineIndent=-6, spaceAfter=1)
+    body_s    = ps("BD",  "Helvetica",              9,  13, BLACK, spaceAfter=2)
+    note_s    = ps("FT",  "Helvetica",              7,  10, GREY,  TA_CENTER)
 
-    SECTION_KW = {"PROFESSIONAL", "EXPERIENCE", "EDUCATION", "SKILLS",
-                  "SUMMARY", "CERTIFICATIONS", "PROJECTS", "AWARDS",
-                  "WORK", "TECHNICAL", "ADDITIONAL", "CORE", "COMPETENCIES"}
-
-    def sec_hdr(title):
-        t = Table([[Paragraph(title.upper(), SEC_S)]], colWidths=[W])
+    def sec_hdr(title, col_w):
+        t = Table([[Paragraph(title.upper(), sec_s)]], colWidths=[col_w])
         t.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,-1), BLUE),
-            ("TOPPADDING",    (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("BACKGROUND",    (0,0), (-1,-1), TEAL),
+            ("TOPPADDING",    (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
             ("LEFTPADDING",   (0,0), (-1,-1), 8),
             ("RIGHTPADDING",  (0,0), (-1,-1), 8),
         ]))
         return t
 
-    def co_date_row(left_txt, right_txt):
+    def co_date_row(left_txt, right_txt, col_w):
         t = Table(
-            [[Paragraph(_md_inline(left_txt), CO_S),
-              Paragraph(_md_inline(right_txt), DATE_S)]],
-            colWidths=[W * 0.68, W * 0.32]
+            [[Paragraph(_md_inline(left_txt), co_s),
+              Paragraph(_md_inline(right_txt), date_s)]],
+            colWidths=[col_w * 0.65, col_w * 0.35]
         )
         t.setStyle(TableStyle([
             ("VALIGN",        (0,0), (-1,-1), "BOTTOM"),
@@ -342,131 +347,190 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         ]))
         return t
 
-    # ── Clean input: strip any section heading line ───────────────────────────
+    # ── Avatar flowable ───────────────────────────────────────────────────────
+    class InitialsCircle(Flowable):
+        def __init__(self, initials, size=46):
+            super().__init__()
+            self.initials = initials
+            self.width = size
+            self.height = size
+            self._size = size
+        def draw(self):
+            r = self._size / 2
+            self.canv.setFillColor(TEAL)
+            self.canv.circle(r, r, r, fill=1, stroke=0)
+            self.canv.setFillColor(WHITE)
+            self.canv.setFont("Helvetica-Bold", self._size * 0.33)
+            self.canv.drawCentredString(r, r - self._size * 0.11, self.initials)
+
+    # ── Parse markdown ────────────────────────────────────────────────────────
     body = re.sub(r"(?m)^#{1,3}\s+(?:\d+[\.\:]?\s*)?TAILORED RESUME[^\n]*\n?",
                   "", resume_section, flags=re.IGNORECASE).strip()
     lines = body.split("\n")
 
-    # ── Extract name and contact from first few lines ─────────────────────────
-    name, contact = "", ""
-    skip_indices  = set()
-
-    for idx, raw in enumerate(lines[:6]):
+    # Extract name, subtitle, contact
+    name, subtitle, contact = "", "", ""
+    skip = set()
+    for idx, raw in enumerate(lines[:8]):
         s = raw.strip()
         if not s:
             continue
-        # Name: **First Last** OR plain "First Last" (title case, short, no special chars)
-        bold_m = re.match(r"^\*\*([^*|]+)\*\*\s*$", s)
-        plain_m = (re.match(r"^[A-Z][a-z]+(?: [A-Z][a-z]*)+$", s) and len(s) < 45)
+        bold_m  = re.match(r"^\*\*([^*|]+)\*\*\s*$", s)
+        plain_m = re.match(r"^[A-Z][a-z]+(?: [A-Z][a-z]*)+$", s) and len(s) < 45
         if not name and (bold_m or plain_m):
             candidate = bold_m.group(1).strip() if bold_m else s
-            # Reject if it looks like a section keyword
             if not any(kw in candidate.upper() for kw in SECTION_KW):
-                name = candidate
-                skip_indices.add(idx)
-                continue
-        # Contact: line with | or @ and no markdown heading
+                name = candidate; skip.add(idx); continue
         if not contact and ("|" in s or "@" in s) and not s.startswith("#"):
-            contact = re.sub(r"\*+", "", s).strip()
-            skip_indices.add(idx)
+            contact = re.sub(r"\*+", "", s).strip(); skip.add(idx); continue
+        if name and not subtitle and re.match(r"^\*[^*].+[^*]\*$", s):
+            subtitle = s[1:-1]; skip.add(idx); continue
 
-    # ── Header block ─────────────────────────────────────────────────────────
-    story = []
-    story.append(Paragraph(name or "Candidate", NAME_S))
-    if contact:
-        story.append(Paragraph(contact, CONTACT_S))
-    story.append(HRFlowable(width=W, thickness=2.5, color=BLUE, spaceAfter=2))
-    story.append(Paragraph(
-        f"ATS-Optimised Resume \u00a0|\u00a0 {date.today().strftime('%B %d, %Y')}",
-        NOTE_S
-    ))
-    story.append(Spacer(1, 10))
+    initials = "".join(w[0].upper() for w in name.split()[:2]) if name else "CV"
 
-    # ── Render body ───────────────────────────────────────────────────────────
+    # ── Route sections to left / right columns ────────────────────────────────
+    LEFT_KW  = {"SUMMARY", "PROFESSIONAL", "EXPERIENCE", "WORK"}
+    RIGHT_KW = {"CERTIFICATION", "SKILL", "EDUCATION", "PROJECT", "AWARD",
+                "KEY", "ACHIEVEMENT", "ADDITIONAL", "CORE", "TECHNICAL", "TOOLS", "COMPETENC"}
+
+    left_story:  list = []
+    right_story: list = []
+    current      = left_story   # default destination before first heading
+
     for idx, raw in enumerate(lines):
-        if idx in skip_indices:
+        if idx in skip:
             continue
-
         s = raw.strip()
 
-        # Markdown section heading (## or ###)
-        heading_m = re.match(r"^#{2,3}\s+(?:\d+[\.\:]?\s*)?(.+)$", s)
-        if heading_m:
-            txt = heading_m.group(1).strip()
-            story.append(Spacer(1, 7))
-            story.append(sec_hdr(txt))
-            story.append(Spacer(1, 4))
+        # Section heading (## / ### or **KEYWORD**)
+        hm       = re.match(r"^#{2,3}\s+(?:\d+[\.\:]?\s*)?(.+)$", s)
+        bold_sec = re.match(r"^\*\*([^*]+)\*\*\s*$", s)
+        heading_txt = None
+        if hm:
+            heading_txt = hm.group(1).strip()
+        elif bold_sec and any(kw in bold_sec.group(1).upper() for kw in SECTION_KW):
+            heading_txt = bold_sec.group(1).strip()
+
+        if heading_txt:
+            up = heading_txt.upper()
+            if any(kw in up for kw in LEFT_KW):
+                current = left_story
+            elif any(kw in up for kw in RIGHT_KW):
+                current = right_story
+            col_w = LEFT_W if current is left_story else RIGHT_W
+            current.append(Spacer(1, 6))
+            current.append(sec_hdr(heading_txt, col_w))
+            current.append(Spacer(1, 4))
             continue
 
-        # Bold all-caps or bold section keyword → section header
-        bold_all_m = re.match(r"^\*\*([^*]+)\*\*\s*$", s)
-        if bold_all_m:
-            inner = bold_all_m.group(1).strip()
-            if any(kw in inner.upper() for kw in SECTION_KW):
-                story.append(Spacer(1, 7))
-                story.append(sec_hdr(inner))
-                story.append(Spacer(1, 4))
-                continue
-            # Bold line with date → company + date row
+        # Bold line (company + date, or plain company name)
+        if bold_sec:
+            inner  = bold_sec.group(1).strip()
+            col_w  = LEFT_W if current is left_story else RIGHT_W
             date_m = re.search(
                 r"[\|—\-]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
-                r"|20\d\d|Present)[^\|]*)",
-                inner, re.IGNORECASE
-            )
+                r"|20\d\d|Present)[^\|]*)", inner, re.IGNORECASE)
             if date_m:
-                right = date_m.group(1).strip()
-                left  = inner[:date_m.start()].strip().rstrip("|—- ")
-                story.append(Spacer(1, 6))
-                story.append(co_date_row(left, right))
-                continue
-            # Plain bold line (company name, role, etc.)
-            story.append(Spacer(1, 5))
-            story.append(Paragraph(_md_inline(s), CO_S))
-            continue
-
-        # Bold text inline (not standalone) → body paragraph
-        if s.startswith("**") and "**" in s[2:]:
-            story.append(Paragraph(_md_inline(s), BODY_S))
+                right_txt = date_m.group(1).strip()
+                left_txt  = inner[:date_m.start()].strip().rstrip("|—- ")
+                current.append(Spacer(1, 5))
+                current.append(co_date_row(left_txt, right_txt, col_w))
+            else:
+                current.append(Spacer(1, 4))
+                current.append(Paragraph(_md_inline(s), co_s))
             continue
 
         # Italic standalone → job title
         if re.match(r"^\*[^*].+[^*]\*$", s):
-            story.append(Paragraph(_md_inline(s[1:-1]), TITLE_S))
+            current.append(Paragraph(_md_inline(s[1:-1]), role_s))
+            continue
+
+        # Bold inline (not standalone)
+        if s.startswith("**") and "**" in s[2:]:
+            current.append(Paragraph(_md_inline(s), body_s))
             continue
 
         # Bullet
         if s.startswith("- ") or s.startswith("* "):
-            story.append(Paragraph("\u2013 " + _md_inline(s[2:].strip()), BULLET_S))
+            current.append(Paragraph("\u2013 " + _md_inline(s[2:].strip()), bullet_s))
             continue
 
         # Numbered list
         if re.match(r"^\d+\.\s", s):
             num = re.match(r"^(\d+)\.", s).group(1)
-            story.append(Paragraph(
-                f"{num}. " + _md_inline(re.sub(r"^\d+\.\s*", "", s).strip()),
-                BULLET_S))
+            current.append(Paragraph(f"{num}. " + _md_inline(
+                re.sub(r"^\d+\.\s*", "", s).strip()), bullet_s))
             continue
 
         # HR
         if s in ("---", "***", "___"):
-            story.append(HRFlowable(width=W, thickness=0.4,
-                                    color=colors.HexColor("#e2e8f0"), spaceAfter=3))
+            current.append(HRFlowable(width="100%", thickness=0.3,
+                                      color=colors.HexColor("#c8d8d8"), spaceAfter=2))
             continue
 
-        # Non-empty body
         if s:
-            story.append(Paragraph(_md_inline(s), BODY_S))
+            current.append(Paragraph(_md_inline(s), body_s))
         else:
-            story.append(Spacer(1, 3))
+            current.append(Spacer(1, 3))
 
-    # ── Footer ────────────────────────────────────────────────────────────────
-    story.append(Spacer(1, 14))
-    story.append(HRFlowable(width=W, thickness=0.5,
-                            color=colors.HexColor("#e2e8f0"), spaceAfter=4))
-    story.append(Paragraph(
-        "ATS-Optimised by Resume Tailor Agent \u00a0|\u00a0 github.com/akv803101/-ResumeAgent-",
-        NOTE_S
-    ))
+    # ── Build document with three frames: header, left col, right col ─────────
+    hdr_frame = Frame(
+        LM, PAGE_H - 0.45*inch - HEADER_H,
+        USABLE_W, HEADER_H,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        showBoundary=0
+    )
+    left_frame = Frame(
+        LM, 0.45*inch,
+        LEFT_W, BODY_H,
+        leftPadding=0, rightPadding=4, topPadding=0, bottomPadding=0,
+        showBoundary=0
+    )
+    right_frame = Frame(
+        LM + LEFT_W + GAP_W, 0.45*inch,
+        RIGHT_W, BODY_H,
+        leftPadding=4, rightPadding=0, topPadding=0, bottomPadding=0,
+        showBoundary=0
+    )
+
+    doc = BaseDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=RM, leftMargin=LM,
+        topMargin=0.45*inch, bottomMargin=0.45*inch,
+    )
+    doc.addPageTemplates([PageTemplate(
+        id="main",
+        frames=[hdr_frame, left_frame, right_frame]
+    )])
+
+    # ── Header content ────────────────────────────────────────────────────────
+    name_block = [
+        Paragraph(name or "Candidate", name_s),
+        Paragraph(subtitle, sub_s) if subtitle else Spacer(1, 2),
+        Spacer(1, 3),
+        Paragraph(contact, contact_s) if contact else Spacer(1, 2),
+    ]
+    hdr_tbl = Table(
+        [[name_block, InitialsCircle(initials)]],
+        colWidths=[USABLE_W - 0.65*inch, 0.65*inch]
+    )
+    hdr_tbl.setStyle(TableStyle([
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",         (1,0), (1,0),   "RIGHT"),
+        ("LEFTPADDING",   (0,0), (-1,-1), 0),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ("TOPPADDING",    (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+    ]))
+
+    story = (
+        [hdr_tbl,
+         HRFlowable(width=USABLE_W, thickness=2, color=TEAL, spaceAfter=4),
+         FrameBreak()]
+        + left_story
+        + [FrameBreak()]
+        + right_story
+    )
 
     doc.build(story)
     return buffer.getvalue()
