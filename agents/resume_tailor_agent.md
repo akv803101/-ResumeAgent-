@@ -37,7 +37,12 @@ Show your calculation: (0.5 × keyword%) + (0.2 × skills%) + (0.15 × summary) 
 ## Generated: [Date]
 
 ### 1. TAILORED RESUME
-Output the resume in this EXACT clean format (no commentary, no analysis, no labels like "Here is your resume"):
+Output the resume in this EXACT clean format. STRICT RULES for this section:
+- Zero commentary, analysis, or labels of any kind
+- No notes, advisories, or "Note on X:" lines — anywhere in this section
+- No qualification warnings, skill-level disclaimers, or fabrication flags
+- Every line must be resume content only: name, contact, bullets, section headers, dates
+- If you have a concern about a skill or bullet, save it for Section 2 (GAP ANALYSIS), never the resume
 
 **[CANDIDATE FULL NAME]**
 [email] | [phone] | [LinkedIn or location] (copy verbatim from original resume)
@@ -81,6 +86,7 @@ Tools: [comma-separated list]
 - Total output: structured Markdown, 1,500-2,500 words
 - Never fabricate skills, experience, or numbers
 - Never use words like "assumed", "estimated", "approximately", or symbols like "~" anywhere in the resume output — write numbers directly without qualifiers
+- Never insert "Note on X:", advisories, skill-level warnings, or any commentary into the TAILORED RESUME section — all such content belongs exclusively in Section 2 or Section 3
 - If resume and JD have <30% keyword overlap, warn the user:
   "This role may be a significant stretch. Consider whether to apply."
 - Maintain the candidate's authentic voice — don't make a Python developer sound like a management consultant (unless they are one)
