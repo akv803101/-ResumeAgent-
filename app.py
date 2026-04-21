@@ -536,6 +536,133 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
     return buffer.getvalue()
 
 
+# ── ATS-FRIENDLY RESUME PDF (single-column, no tables/images) ────────────────
+def generate_ats_pdf(resume_section: str, target_role: str = "") -> bytes:
+    """
+    Single-column, no-frills PDF for ATS submission.
+    No tables, no columns, no images — maximises machine parsability.
+    """
+    buffer = io.BytesIO()
+    W = letter[0] - 1.4 * inch
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=0.7*inch, leftMargin=0.7*inch,
+        topMargin=0.65*inch,  bottomMargin=0.65*inch,
+    )
+
+    BLACK = colors.HexColor("#1e293b")
+    GREY  = colors.HexColor("#64748b")
+    WHITE = colors.white
+
+    SECTION_KW = {"PROFESSIONAL", "EXPERIENCE", "EDUCATION", "SKILLS",
+                  "SUMMARY", "CERTIFICATIONS", "PROJECTS", "AWARDS",
+                  "WORK", "TECHNICAL", "ADDITIONAL", "CORE", "COMPETENCIES",
+                  "KEY", "ACHIEVEMENT", "TOOLS"}
+
+    def ps(name, font="Helvetica", size=10, leading=14,
+           color=BLACK, align=TA_LEFT, **kw):
+        return ParagraphStyle(name, fontName=font, fontSize=size, leading=leading,
+                              textColor=color, alignment=align, **kw)
+
+    name_s    = ps("AN", "Helvetica-Bold",   16, 20, BLACK, TA_LEFT)
+    contact_s = ps("AC", "Helvetica",         9, 13, GREY,  TA_LEFT, spaceAfter=4)
+    sec_s     = ps("AS", "Helvetica-Bold",   10, 14, BLACK, spaceBefore=10, spaceAfter=2)
+    co_s      = ps("AO", "Helvetica-Bold",   10, 14, BLACK)
+    role_s    = ps("AR", "Helvetica-Oblique", 9, 13, GREY,  spaceAfter=1)
+    date_s    = ps("AD", "Helvetica",         9, 13, GREY)
+    bullet_s  = ps("AB", "Helvetica",         9, 13, BLACK, leftIndent=12, firstLineIndent=-6, spaceAfter=1)
+    body_s    = ps("BD", "Helvetica",         9, 13, BLACK, spaceAfter=2)
+
+    body = re.sub(r"(?m)^#{1,3}\s+(?:\d+[\.\:]?\s*)?TAILORED RESUME[^\n]*\n?",
+                  "", resume_section, flags=re.IGNORECASE).strip()
+    lines = body.split("\n")
+
+    name, contact = "", ""
+    skip = set()
+    for idx, raw in enumerate(lines[:8]):
+        s = raw.strip()
+        if not s: continue
+        bold_m  = re.match(r"^\*\*([^*|]+)\*\*\s*$", s)
+        plain_m = re.match(r"^[A-Z][a-z]+(?: [A-Z][a-z]*)+$", s) and len(s) < 45
+        if not name and (bold_m or plain_m):
+            candidate = bold_m.group(1).strip() if bold_m else s
+            if not any(kw in candidate.upper() for kw in SECTION_KW):
+                name = candidate; skip.add(idx); continue
+        if not contact and ("|" in s or "@" in s) and not s.startswith("#"):
+            contact = re.sub(r"\*+", "", s).strip(); skip.add(idx); continue
+
+    story = []
+    story.append(Paragraph(name or "Candidate", name_s))
+    if contact:
+        story.append(Paragraph(contact, contact_s))
+    story.append(HRFlowable(width=W, thickness=1, color=BLACK, spaceAfter=6))
+
+    for idx, raw in enumerate(lines):
+        if idx in skip: continue
+        s = raw.strip()
+
+        hm = re.match(r"^#{2,3}\s+(?:\d+[\.\:]?\s*)?(.+)$", s)
+        bold_sec = re.match(r"^\*\*([^*]+)\*\*\s*$", s)
+        heading_txt = None
+        if hm:
+            heading_txt = hm.group(1).strip()
+        elif bold_sec and any(kw in bold_sec.group(1).upper() for kw in SECTION_KW):
+            heading_txt = bold_sec.group(1).strip()
+
+        if heading_txt:
+            story.append(Paragraph(heading_txt.upper(), sec_s))
+            story.append(HRFlowable(width=W, thickness=0.5, color=GREY, spaceAfter=3))
+            continue
+
+        if bold_sec:
+            inner  = bold_sec.group(1).strip()
+            date_m = re.search(
+                r"[\|—\-]\s*((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
+                r"|20\d\d|Present)[^\|]*)", inner, re.IGNORECASE)
+            if date_m:
+                right_txt = date_m.group(1).strip()
+                left_txt  = inner[:date_m.start()].strip().rstrip("|—- ")
+                story.append(Spacer(1, 4))
+                story.append(Paragraph(_md_inline(left_txt), co_s))
+                story.append(Paragraph(_md_inline(right_txt), date_s))
+            else:
+                story.append(Spacer(1, 3))
+                story.append(Paragraph(_md_inline(s), co_s))
+            continue
+
+        if re.match(r"^\*[^*].+[^*]\*$", s):
+            story.append(Paragraph(_md_inline(s[1:-1]), role_s))
+            continue
+
+        if s.startswith("**") and "**" in s[2:]:
+            story.append(Paragraph(_md_inline(s), body_s))
+            continue
+
+        if s.startswith("- ") or s.startswith("* "):
+            story.append(Paragraph("- " + _md_inline(s[2:].strip()), bullet_s))
+            continue
+
+        if re.match(r"^\d+\.\s", s):
+            num = re.match(r"^(\d+)\.", s).group(1)
+            story.append(Paragraph(f"{num}. " + _md_inline(
+                re.sub(r"^\d+\.\s*", "", s).strip()), bullet_s))
+            continue
+
+        if s in ("---", "***", "___"):
+            story.append(HRFlowable(width=W, thickness=0.3,
+                                    color=colors.HexColor("#cbd5e1"), spaceAfter=2))
+            continue
+
+        if s:
+            story.append(Paragraph(_md_inline(s), body_s))
+        else:
+            story.append(Spacer(1, 3))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
 # ── Main UI ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="main-header">📄 Resume Tailor Agent</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Paste a LinkedIn JD + your resume → get an ATS-optimised tailored resume + full report as PDF</div>', unsafe_allow_html=True)
@@ -602,10 +729,15 @@ if "result" in st.session_state:
             resume_section or result,
             target_role
         )
+        st.session_state["ats_pdf"]    = generate_ats_pdf(
+            resume_section or result,
+            target_role
+        )
         st.session_state["report_pdf"] = generate_report_pdf(result, target_role)
         st.session_state["pdf_role"]   = safe_role
 
     resume_pdf = st.session_state["resume_pdf"]
+    ats_pdf    = st.session_state["ats_pdf"]
     report_pdf = st.session_state["report_pdf"]
 
     # ── Success + download buttons (left column only, no tabs, no text output) ─
@@ -615,17 +747,32 @@ if "result" in st.session_state:
         st.markdown("#### 📥 Download")
 
         st.markdown(
-            '<p class="dl-label">📄 Clean resume — ready to submit to employers</p>',
+            '<p class="dl-label">🎨 Visual resume — share with recruiters & humans</p>',
             unsafe_allow_html=True
         )
         st.download_button(
-            label="⬇️  Tailored Resume PDF",
+            label="⬇️  Visual Resume PDF",
             data=resume_pdf,
-            file_name=f"resume_{safe_role}.pdf" if safe_role else "resume_tailored.pdf",
+            file_name=f"resume_visual_{safe_role}.pdf" if safe_role else "resume_visual.pdf",
             mime="application/pdf",
             type="primary",
             use_container_width=True,
             key="dl_resume"
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown(
+            '<p class="dl-label">🤖 ATS resume — submit this to job portals & applicant systems</p>',
+            unsafe_allow_html=True
+        )
+        st.download_button(
+            label="⬇️  ATS-Friendly Resume PDF",
+            data=ats_pdf,
+            file_name=f"resume_ats_{safe_role}.pdf" if safe_role else "resume_ats.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="dl_ats"
         )
 
         st.markdown("<br>", unsafe_allow_html=True)
