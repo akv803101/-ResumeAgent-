@@ -14,6 +14,7 @@ class _Col:
     def __exit__(self, *a): pass
     def __getattr__(self, n): return lambda *a, **kw: None
 st_stub.columns = lambda n, **kw: [_Col()] * (n if isinstance(n, int) else len(n))
+st_stub.radio = lambda *a, **kw: (kw.get("options") or [""])[0]
 sys.modules["streamlit"] = st_stub
 
 from app import generate_resume_pdf, generate_ats_pdf, generate_report_pdf
