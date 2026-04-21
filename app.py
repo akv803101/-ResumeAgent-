@@ -448,7 +448,8 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
     sections   = {}   # sec_name → [flowables]
     skills_raw = {}   # sec_name → [skill strings]
     current    = None
-    SKIP_TO    = max(0, name_idx) + 3   # skip name + contact + blank
+    # Only skip preamble lines if we actually found the name; otherwise parse from top
+    SKIP_TO    = (name_idx + 3) if name_idx >= 0 else 0
 
     i = 0
     while i < len(lines):
@@ -456,21 +457,34 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         s    = line.strip()
 
         # Determine if this line is a section header
-        is_heading   = bool(re.match(r"^##\s+|^###\s+", s))
+        # 1. Any markdown heading (# / ## / ###)
+        is_heading   = bool(re.match(r"^#+\s+", s))
         raw_sec_name = re.sub(r"^#+\s*|\*+", "", s).strip().upper()
+
+        # 2. Bold header in any case: **Professional Summary** or **PROFESSIONAL SUMMARY**
+        #    Only recognised if the normalised name is in the known-sections whitelist.
         is_bold_caps = bool(
-            re.match(r"^\*\*[A-Z][A-Z &/]+\*\*\s*$", s)
+            re.match(r"^\*\*[A-Za-z][A-Za-z &/\-]+\*\*\s*$", s)
             and len(raw_sec_name) >= 4
-            and raw_sec_name in _KNOWN_SECTIONS    # whitelist guard
+            and raw_sec_name in _KNOWN_SECTIONS
         )
 
+        # 3. Plain ALL-CAPS header with no formatting (e.g. "EXPERIENCE")
+        is_plain_caps = bool(
+            s and s == s.upper() and s.replace(" ", "").isalpha()
+            and len(s) >= 4 and s in _KNOWN_SECTIONS
+        )
+
+        is_section_header = is_heading or is_bold_caps or is_plain_caps
+
         # Skip header lines (name/contact) but never skip a section header
-        if i < SKIP_TO and not is_heading and not is_bold_caps:
+        if i < SKIP_TO and not is_section_header:
             i += 1; continue
 
-        if is_heading or is_bold_caps:
+        if is_section_header:
             current = raw_sec_name
-            sections[current] = []
+            if current not in sections:
+                sections[current] = []
             i += 1; continue
 
         if current is None:
@@ -556,6 +570,26 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
         if sn not in placed and fl:
             left_fl += sec_head(sn, L_INN)
             left_fl += fl
+
+    # ── Fallback: if body is still empty, render all content as plain flow ────
+    if not left_fl and not right_fl:
+        # Re-parse lines as flat content — handles any AI format that didn't
+        # trigger section detection at all.
+        for raw in lines[SKIP_TO:]:
+            s = raw.strip()
+            if not s:
+                left_fl.append(Spacer(1, 3))
+            elif s.startswith("- ") or s.startswith("• "):
+                left_fl.append(Paragraph("\u2022 " + _md_inline(s[2:]), BUL_S))
+            elif re.match(r"^\*\*[^*]+\*\*", s) or re.match(r"^#+\s+", s):
+                title = re.sub(r"^#+\s*|\*+", "", s).strip()
+                left_fl += [
+                    Spacer(1, 6),
+                    Paragraph(title.upper(), SEC_S),
+                    HRFlowable(width=L_INN, thickness=1, color=MGREY, spaceAfter=4),
+                ]
+            elif s:
+                left_fl.append(Paragraph(_md_inline(s), BODY_S))
 
     # ── Two-column body Table ─────────────────────────────────────────────────
     body = Table([[left_fl, right_fl]], colWidths=[LW, RW])
