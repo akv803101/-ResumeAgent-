@@ -94,27 +94,33 @@ def _parse_md_table(lines, cell_style, header_style):
     """Parse Markdown table lines into a ReportLab Table."""
     rows = []
     for line in lines:
-        if re.match(r"^\|[\s\-:|]+\|[\s\-:|]*$", line.strip()):
+        # Skip separator rows (|---|---|) including variants with spaces/colons
+        if re.match(r"^\|[\s\-:|]+$", line.strip().replace("|", "|", 1)) or \
+           re.sub(r"[|\-:\s]", "", line.strip()) == "":
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        rows.append(cells)
+        if cells:
+            rows.append(cells)
     if not rows:
         return None
+    col_count = max(len(r) for r in rows)
+    # Pad all rows to the same column count so ReportLab doesn't choke
+    padded = [r + [""] * (col_count - len(r)) for r in rows]
     table_data = []
-    for r_idx, row in enumerate(rows):
+    for r_idx, row in enumerate(padded):
         s = header_style if r_idx == 0 else cell_style
         table_data.append([Paragraph(_md_inline(c), s) for c in row])
-    col_count = max(len(r) for r in table_data)
     col_width = 6.5 * inch / col_count
     tbl = Table(table_data, colWidths=[col_width] * col_count, repeatRows=1)
     tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4361ee")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f7f9ff"), colors.white]),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c8d0f0")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#4361ee")),
+        ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#f7f9ff"), colors.white]),
+        ("GRID",          (0, 0), (-1, -1), 0.5, colors.HexColor("#c8d0f0")),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     return tbl
@@ -648,7 +654,18 @@ with col2:
     )
 
 st.markdown("")
-run_col, _ = st.columns([2, 6])
+fmt_col, run_col, _ = st.columns([3, 2, 3])
+with fmt_col:
+    resume_format = st.radio(
+        "Resume format",
+        options=["🎨 Two-Column Visual", "📄 Classic Single Column"],
+        index=0,
+        horizontal=True,
+        help=(
+            "Two-Column Visual: modern design with avatar — great for sharing with recruiters. "
+            "Classic Single Column: clean and safe — guaranteed alignment on any resume length."
+        )
+    )
 with run_col:
     run = st.button("🚀 Tailor My Resume", type="primary")
 
@@ -687,47 +704,44 @@ if "result" in st.session_state:
 
     resume_section = _extract_section(result, "TAILORED RESUME")
 
-    # ── Generate PDFs (cached in session so re-renders don't re-generate) ─────
-    if "resume_pdf" not in st.session_state or st.session_state.get("pdf_role") != safe_role:
-        st.session_state["resume_pdf"] = generate_resume_pdf(
-            resume_section or result,
-            target_role
-        )
-        st.session_state["ats_pdf"]    = generate_ats_pdf(
-            resume_section or result,
-            target_role
-        )
-        st.session_state["report_pdf"] = generate_report_pdf(result, target_role)
-        st.session_state["pdf_role"]   = safe_role
+    use_two_col = resume_format.startswith("🎨")
 
-    resume_pdf = st.session_state["resume_pdf"]
+    # ── Generate PDFs (cached; re-generate when role or format changes) ────────
+    cache_key = f"{safe_role}_{use_two_col}"
+    if st.session_state.get("pdf_cache_key") != cache_key:
+        if use_two_col:
+            st.session_state["visual_pdf"] = generate_resume_pdf(resume_section or result, target_role)
+        st.session_state["ats_pdf"]    = generate_ats_pdf(resume_section or result, target_role)
+        st.session_state["report_pdf"] = generate_report_pdf(result, target_role)
+        st.session_state["pdf_cache_key"] = cache_key
+
     ats_pdf    = st.session_state["ats_pdf"]
     report_pdf = st.session_state["report_pdf"]
 
-    # ── Success + download buttons (left column only, no tabs, no text output) ─
+    # ── Success + download buttons ─────────────────────────────────────────────
     left_col, _ = st.columns([1, 1])
     with left_col:
         st.success("✅ Done! Your tailored resume package is ready.")
         st.markdown("#### 📥 Download")
 
-        st.markdown(
-            '<p class="dl-label">🎨 Visual resume — share with recruiters & humans</p>',
-            unsafe_allow_html=True
-        )
-        st.download_button(
-            label="⬇️  Visual Resume PDF",
-            data=resume_pdf,
-            file_name=f"resume_visual_{safe_role}.pdf" if safe_role else "resume_visual.pdf",
-            mime="application/pdf",
-            type="primary",
-            use_container_width=True,
-            key="dl_resume"
-        )
+        if use_two_col:
+            st.markdown(
+                '<p class="dl-label">🎨 Two-column visual resume — share with recruiters</p>',
+                unsafe_allow_html=True
+            )
+            st.download_button(
+                label="⬇️  Visual Resume PDF",
+                data=st.session_state["visual_pdf"],
+                file_name=f"resume_visual_{safe_role}.pdf" if safe_role else "resume_visual.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True,
+                key="dl_visual"
+            )
+            st.markdown("<br>", unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
         st.markdown(
-            '<p class="dl-label">🤖 ATS resume — submit this to job portals & applicant systems</p>',
+            '<p class="dl-label">🤖 ATS resume — submit this to job portals</p>',
             unsafe_allow_html=True
         )
         st.download_button(
@@ -735,6 +749,7 @@ if "result" in st.session_state:
             data=ats_pdf,
             file_name=f"resume_ats_{safe_role}.pdf" if safe_role else "resume_ats.pdf",
             mime="application/pdf",
+            type="primary" if not use_two_col else "secondary",
             use_container_width=True,
             key="dl_ats"
         )
