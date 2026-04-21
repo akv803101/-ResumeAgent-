@@ -19,6 +19,13 @@ Rewrite every bullet using the STAR-K formula.
 Do NOT fabricate experience — only reframe existing work.
 Preserve the candidate's original sentence structure. Change words, not voice.
 
+### Step 3b: Self-Check Bullets (before moving on)
+Before proceeding, verify:
+1. Every bullet has at least one number — rewrite any that don't.
+2. No two bullets in the same role share the same opening verb — replace duplicates.
+3. No verb appears more than twice as an opener across all roles — replace extras.
+Only proceed to Step 4 once all three checks pass.
+
 ### Step 4: Generate Summary
 Run summary_generator skill with: JD + rewritten bullets + gap analysis.
 Generate 3 variants. Recommend the highest-scoring one.

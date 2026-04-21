@@ -35,10 +35,16 @@ Every bullet must follow: [Action Verb] + [What you did] + [Scale/scope] + [Resu
 - Each bullet should contain 1-2 JD keywords maximum (more = stuffing)
 
 ### Quantification Rules
-- Every bullet MUST have at least one number
+- Every bullet MUST have at least one number — no exceptions
 - Acceptable number types: revenue ($), percentage (%), count (N users), time (hours/days saved), scale (records, transactions)
 - If original has no numbers, infer a reasonable estimate from context and embed it directly — no markers, labels, or qualifiers like "~", "(assumed)", "(estimated)", or similar
 - Example: "managed data pipelines" → "managed 8 data pipelines processing 2M records daily with 99.7% uptime"
+- After rewriting ALL bullets, self-check: count how many lack a number. If any remain, rewrite them before finalising.
+
+### Anti-Repetition Rules
+- No two bullets within the same role may start with the same action verb
+- Across all roles, no action verb may appear more than twice as a bullet opener
+- After rewriting, scan all bullet openers. If duplicates exist, replace with a synonym from the same seniority tier before finalising.
 
 ### Verb Upgrades (by seniority)
 - Junior: Built, Developed, Created, Analyzed, Automated
