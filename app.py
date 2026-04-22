@@ -5,6 +5,7 @@ import anthropic
 import io
 import re
 from datetime import date
+import memory as mem          # ← persistent run history + feedback
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -69,7 +70,9 @@ def load_prompts():
     import os
     base_path = os.path.dirname(__file__)
     system = open(os.path.join(base_path, "agents/resume_tailor_agent.md")).read()
-    for s in ["jd_parser", "gap_analyzer", "bullet_rewriter", "summary_generator", "ats_scorer"]:
+    # memory_context skill is prepended first so Step 0 can reference it
+    for s in ["memory_context", "jd_parser", "gap_analyzer",
+              "bullet_rewriter", "summary_generator", "ats_scorer"]:
         system += "\n\n---\n\n" + open(os.path.join(base_path, f"skills/{s}.md")).read()
     return system
 
@@ -681,7 +684,14 @@ if run:
     else:
         with st.spinner("Analyzing JD → Finding gaps → Rewriting bullets → Generating summary → Scoring ATS…"):
             try:
-                system = load_prompts()
+                # ── Build system prompt: static skills + dynamic memory ────────
+                base_system  = load_prompts()
+                mem_context  = mem.get_memory_context()       # "" on first run
+                system       = (
+                    mem_context + "\n\n---\n\n" + base_system
+                    if mem_context else base_system
+                )
+
                 client = anthropic.Anthropic()
                 msg = client.messages.create(
                     model="claude-sonnet-4-6",
@@ -695,6 +705,13 @@ if run:
                 result = msg.content[0].text
                 st.session_state["result"]     = result
                 st.session_state["jd_snippet"] = jd[:80]
+
+                # ── Save run to memory/runs.json ──────────────────────────────
+                run_meta = mem.extract_run_metadata(result)
+                run_id   = mem.save_run(run_meta)
+                st.session_state["run_id"]     = run_id
+                st.session_state["run_rating"] = None  # reset feedback for new run
+
                 # Clear cached PDFs so they regenerate for new result
                 st.session_state.pop("resume_pdf", None)
                 st.session_state.pop("report_pdf", None)
@@ -760,3 +777,32 @@ if "result" in st.session_state:
             use_container_width=True,
             key="dl_report"
         )
+
+        # ── Feedback loop ─────────────────────────────────────────────────────
+        # Ratings are saved to memory/runs.json and used to personalise
+        # future runs via the memory context injected into the system prompt.
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("**Was this tailoring helpful?**")
+        st.caption("Your rating is stored locally and helps personalise future runs.")
+
+        run_id     = st.session_state.get("run_id")
+        cur_rating = st.session_state.get("run_rating")
+
+        if cur_rating is None:
+            fb_up, fb_down, _ = st.columns([1, 1, 3])
+            with fb_up:
+                if st.button("👍  Yes", key="fb_up", use_container_width=True):
+                    if run_id:
+                        mem.save_feedback(run_id, 1)
+                    st.session_state["run_rating"] = 1
+                    st.rerun()
+            with fb_down:
+                if st.button("👎  No", key="fb_down", use_container_width=True):
+                    if run_id:
+                        mem.save_feedback(run_id, -1)
+                    st.session_state["run_rating"] = -1
+                    st.rerun()
+        elif cur_rating == 1:
+            st.success("✅ Great! Saved — future runs will build on this pattern.")
+        else:
+            st.info("📝 Noted — future runs will adjust the approach.")
