@@ -8,6 +8,7 @@
 [![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6-D97706?style=for-the-badge&logo=anthropic&logoColor=white)](https://www.anthropic.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF_Export-2D9CDB?style=for-the-badge)](https://www.reportlab.com/)
+[![Memory](https://img.shields.io/badge/Memory-Persistent_JSON-8B5CF6?style=for-the-badge)](memory.py)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
 
 **Paste a LinkedIn JD + your resume → get two PDFs: a polished tailored resume + a full analysis report**
@@ -43,6 +44,7 @@ This agent fixes that. You paste a job description and your current resume, and 
 - **Two-column resume PDF** — professional layout with avatar, name header, experience left, skills/certs/education right, skill tag pills
 - **Separate analysis PDF** — gap matrix, ATS scorecard, and next steps as a standalone report
 - **Robust PDF engine** — handles any AI output format (markdown headings, bold headings, plain caps); never crashes with LayoutError
+- **Persistent memory layer** — JSON-backed run history with 👍/👎 feedback; agent adapts style, gap emphasis, and summary approach based on past rated runs
 - **~$0.03 per run** — ~7,000 tokens on Claude Sonnet
 
 ---
@@ -50,22 +52,21 @@ This agent fixes that. You paste a job description and your current resume, and 
 ## 🏗 Architecture
 
 ```
-┌─────────────────────┐     ┌──────────────────────┐
-│  LinkedIn JD (text) │     │  Current Resume (text)│
-└──────────┬──────────┘     └───────────┬───────────┘
-           │                            │
-           └──────────┬─────────────────┘
-                      ▼
-          ┌───────────────────────┐
-          │  resume_tailor_agent  │  ← Orchestrator
-          │  (chains 5 skills)    │
+┌─────────────────────┐     ┌──────────────────────┐   ┌─────────────────┐
+│  LinkedIn JD (text) │     │  Current Resume (text)│   │  memory.py      │
+└──────────┬──────────┘     └───────────┬───────────┘   │  runs.json      │
+           │                            │                │  (past runs +   │
+           └──────────┬─────────────────┘                │   ratings)      │
+                      ▼                                   └────────┬────────┘
+          ┌───────────────────────┐                               │ inject context
+          │  resume_tailor_agent  │ ◄─────────────────────────────┘
+          │  Step 0: memory_ctx   │
+          │  Steps 1-5: pipeline  │
           └──────────┬────────────┘
                      │
-        ┌────────────▼────────────────────────────────┐
-        │                                             │
-   ┌────▼─────┐  ┌──────────┐  ┌──────────┐  ┌──────▼──────┐  ┌───────────┐
+   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐  ┌───────────┐
    │ Skill 1  │→ │ Skill 2  │→ │ Skill 3  │→ │  Skill 4    │→ │  Skill 5  │
-   │jd_parser │  │gap_       │  │bullet_   │  │summary_     │  │ats_scorer │
+   │jd_parser │  │gap_      │  │bullet_   │  │summary_     │  │ats_scorer │
    │          │  │analyzer  │  │rewriter  │  │generator    │  │           │
    └──────────┘  └──────────┘  └──────────┘  └─────────────┘  └─────┬─────┘
                                                                       │
@@ -73,6 +74,7 @@ This agent fixes that. You paste a job description and your current resume, and 
                               │              FINAL OUTPUT                     │
                               │  Tailored Resume + Gap Report + ATS Score     │
                               │  → Downloadable as styled PDF                 │
+                              │  → Run saved to memory  👍/👎 feedback        │
                               └───────────────────────────────────────────────┘
 ```
 
@@ -80,6 +82,7 @@ This agent fixes that. You paste a job description and your current resume, and 
 
 | Step | Skill | Input | Output | Why It Matters |
 |------|-------|-------|--------|----------------|
+| 0 | `memory_context.md` | Past run history (injected) | Silent personalisation of Steps 1–5 | Agent learns from rated runs — improves over time |
 | 1 | `jd_parser.md` | Raw JD text | Structured role object (title, skills, ATS keywords) | You must understand the target before adapting |
 | 2 | `gap_analyzer.md` | Parsed JD + Resume | Match matrix: matched / missing / transferable skills | Diagnosis before treatment |
 | 3 | `bullet_rewriter.md` | Resume bullets + JD keywords + gaps | Rewritten bullets with keywords woven in naturally | Keyword alignment is the #1 ATS factor |
@@ -93,18 +96,22 @@ This agent fixes that. You paste a job description and your current resume, and 
 ```
 resume-tailor-agent/
 ├── skills/
+│   ├── memory_context.md      # Skill 0: Memory analyst (Step 0 — reads injected history)
 │   ├── jd_parser.md           # Skill 1: Extract role structure & ATS keywords
 │   ├── gap_analyzer.md        # Skill 2: Match matrix & gap strategies
 │   ├── bullet_rewriter.md     # Skill 3: STAR-K bullet rewrites
 │   ├── summary_generator.md   # Skill 4: 3 scored summary variants
 │   └── ats_scorer.md          # Skill 5: Before/after ATS scorecard
 ├── agents/
-│   └── resume_tailor_agent.md # Orchestrator — chains all 5 skills
+│   └── resume_tailor_agent.md # Orchestrator — chains Step 0 + 5 skills
+├── memory/
+│   └── runs.json              # Auto-created — rolling 50-run history (gitignored)
 ├── examples/
 │   ├── sample_jd.txt          # Sample Senior Data Analyst JD
 │   ├── sample_resume.txt      # Sample generic resume
 │   └── sample_output.md       # Sample tailored report (before/after)
-├── app.py                     # Streamlit web app — two PDF downloads, no tabs
+├── memory.py                  # Persistent memory module (save/load/inject run history)
+├── app.py                     # Streamlit web app — two PDF downloads + 👍/👎 feedback
 ├── resume_agent.py            # CLI runner
 └── README.md
 ```
@@ -270,6 +277,14 @@ Get your API key: [console.anthropic.com](https://console.anthropic.com)
 ---
 
 ## 📋 Changelog
+
+### v1.3 — Memory Layer & Intelligence Over Time
+- **Persistent memory module** (`memory.py`) — rolling 50-run JSON store with `save_run()`, `save_feedback()`, `get_memory_context()`, and `extract_run_metadata()` for ATS score and gap parsing
+- **Step 0 memory skill** (`skills/memory_context.md`) — reads injected run history from the system prompt, carries personalisation silently into Steps 1–5; no visible output
+- **Orchestrator updated** — Step 0 wired before Step 1; skips entirely if no history exists
+- **Memory context injection** — `get_memory_context()` prepended to system prompt before every API call; deliberately not cached so it reflects same-session feedback
+- **👍/👎 feedback loop** — rating buttons appear after every run; ratings saved to `runs.json` and influence future runs (gap emphasis, summary style, ATS target)
+- **Learning from outcomes** — recurring unresolved gaps from flagged runs are addressed more directly; approved run patterns (style, score range) applied as soft preference
 
 ### v1.2 — PDF Reliability & Layout Overhaul
 - **Two-column resume PDF** — professional layout with avatar initials circle, left column (summary + experience), right column (certs + achievements + skills as pill tags), vertical separator line

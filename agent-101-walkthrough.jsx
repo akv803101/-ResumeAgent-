@@ -1008,7 +1008,7 @@ Fix: The constraint is already in bullet_rewriter.md. If it's still happening, s
 
 **Architectural extensions (half day each):**
 - Multi-turn conversation: "make bullet 3 more technical" → Claude edits only that bullet
-- Resume storage: save past runs to a database, show improvement over time
+- Memory layer: save past runs + feedback → agent improves over time ✅ (see Lesson 11)
 - Batch mode: upload 5 JDs, get 5 tailored resumes at once
 
 **The agent design pattern you just learned applies to ANY domain:**
@@ -1021,6 +1021,177 @@ Code reviewer        → context_loader → issue_identifier → fix_suggester
 \`\`\`
 
 Same pattern: skills + orchestrator + thin wrapper + deploy. The only thing that changes is the domain knowledge in the .md files.`
+      }
+    ]
+  },
+
+  // ── LESSON 11 ─────────────────────────────────────────────────────────────
+  {
+    id: 11, phase: 3,
+    title: "Add a Memory Layer",
+    duration: "10 min",
+    objective: "Make the agent learn from past runs using persistent JSON storage and a feedback loop.",
+    badge: "🧠",
+    checklistItems: [
+      "memory.py created with save_run, save_feedback, get_memory_context",
+      "skills/memory_context.md created (Step 0 skill)",
+      "agents/resume_tailor_agent.md updated with Step 0",
+      "app.py wired: memory injected into prompt, runs saved, 👍/👎 buttons showing",
+    ],
+    sections: [
+      {
+        heading: "The Four Intelligence Gaps",
+        content: `By default, every API call is stateless. The agent has no idea what happened yesterday, last week, or 100 runs ago. This creates four gaps:
+
+**Gap 1 — No conversation history**
+Each call starts fresh. Whatever worked in the last run is forgotten.
+
+**Gap 2 — No cross-session memory**
+No database, no file, no record of past JDs, resumes, or scores. Day 100 looks exactly like Day 1.
+
+**Gap 3 — No feedback loop**
+You can tell the output is wrong, but the agent can't learn from that signal.
+
+**Gap 4 — No learning from outcomes**
+The agent makes the same judgment calls on run 100 as on run 1. It never gets better.
+
+The fix is a two-component memory layer: a JSON persistence module and a memory skill.`
+      },
+      {
+        heading: "memory.py — Persistent Run Storage",
+        content: `Create **memory.py** in the project root:
+
+\`\`\`python
+import json, os, re, uuid
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+
+MEMORY_DIR = Path(__file__).parent / "memory"
+RUNS_FILE  = MEMORY_DIR / "runs.json"
+MAX_RUNS   = 50   # FIFO rolling window
+
+def save_run(run_data: dict) -> str:
+    """Persist a new run. Returns run_id (8-char hex)."""
+    run_id = str(uuid.uuid4())[:8]
+    entry = {
+        "id":        run_id,
+        "timestamp": datetime.now().isoformat(),
+        "role":      run_data.get("role", "Unknown"),
+        "ats_before": run_data.get("ats_before"),
+        "ats_after":  run_data.get("ats_after"),
+        "critical_gaps": run_data.get("critical_gaps", []),
+        "rating": None,  # set later via save_feedback()
+    }
+    runs = _load_runs()
+    runs.append(entry)
+    _save_runs(runs)
+    return run_id
+
+def save_feedback(run_id: str, rating: int):
+    """Attach user rating to an existing run. +1 = good, -1 = bad."""
+    runs = _load_runs()
+    for run in runs:
+        if run.get("id") == run_id:
+            run["rating"] = rating
+            break
+    _save_runs(runs)
+
+def get_memory_context(n: int = 6) -> str:
+    """Build a MEMORY CONTEXT block from the N most recent runs.
+    Returns '' when no history exists — caller skips injection."""
+    runs = _load_runs()
+    if not runs:
+        return ""
+    # Prefer rated runs for richer context
+    rated = [r for r in runs if r.get("rating") is not None]
+    pool  = (rated if len(rated) >= 2 else runs)[-n:]
+    # ... build and return the context string
+\`\`\`
+
+**Why FIFO at 50 runs?** The context block injected into the system prompt must stay compact. 50 runs at ~80 chars each is ~4KB — negligible. Older runs become less relevant and get dropped automatically.`
+      },
+      {
+        heading: "Step 0: The Memory Skill",
+        content: `Create **skills/memory_context.md** — this is the new Step 0 in the orchestrator:
+
+\`\`\`markdown
+# Memory Context Skill
+
+## Role
+You are the Memory Analyst. Before the orchestrator runs any skill, you read
+the MEMORY CONTEXT block (if present in the system prompt) and distil it into
+personalisation context for Steps 1–5.
+
+## What to Extract
+- From approved runs (✅): note ATS gain range, role patterns, bridged gaps
+- From flagged runs (❌): note recurring gaps — address them more directly this run
+- If no rated runs exist: apply no personalisation — proceed neutrally
+
+## Output
+Do NOT produce any visible output for this step.
+Carry your insights as internal context into Steps 1–5 only.
+\`\`\`
+
+Then update **agents/resume_tailor_agent.md** — add Step 0 before Step 1:
+
+\`\`\`markdown
+### Step 0: Load Memory Context (if available)
+Check whether a MEMORY CONTEXT block is present at the top of the system prompt.
+If YES → run the memory_context skill:
+  - Identify recurring gaps from flagged runs — address them more directly this run
+  - Note approved run patterns (summary style, ATS gain range)
+  - Carry insights silently into Steps 1–5
+If NO memory context → skip this step and proceed to Step 1.
+Never fabricate or invent memory.
+\`\`\``
+      },
+      {
+        heading: "Wiring It Into app.py",
+        content: `Three changes to **app.py**:
+
+**1 — Import memory module:**
+\`\`\`python
+import memory as mem
+\`\`\`
+
+**2 — Inject memory context into system prompt (before API call):**
+\`\`\`python
+base_system = load_prompts()        # cached static .md files
+mem_context  = mem.get_memory_context()   # fresh every run
+system = (
+    mem_context + "\\n\\n---\\n\\n" + base_system
+    if mem_context else base_system
+)
+\`\`\`
+
+**3 — Save the run + show feedback buttons (after result arrives):**
+\`\`\`python
+run_meta = mem.extract_run_metadata(result)
+run_id   = mem.save_run(run_meta)
+st.session_state["run_id"]     = run_id
+st.session_state["run_rating"] = None
+
+# After download buttons:
+run_id     = st.session_state.get("run_id")
+cur_rating = st.session_state.get("run_rating")
+if cur_rating is None:
+    fb_up, fb_down, _ = st.columns([1, 1, 3])
+    with fb_up:
+        if st.button("👍  Yes"):
+            mem.save_feedback(run_id, 1)
+            st.session_state["run_rating"] = 1; st.rerun()
+    with fb_down:
+        if st.button("👎  No"):
+            mem.save_feedback(run_id, -1)
+            st.session_state["run_rating"] = -1; st.rerun()
+elif cur_rating == 1:
+    st.success("✅ Saved — future runs will build on this pattern.")
+else:
+    st.info("📝 Noted — future runs will adjust the approach.")
+\`\`\`
+
+**Key design choice:** \`load_prompts()\` is cached (static files never change during a session). \`get_memory_context()\` is NOT cached — it must see the latest feedback from runs earlier in the same session.`
       }
     ]
   }

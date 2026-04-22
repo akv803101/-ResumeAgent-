@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agent 101 — Resume Tailor Agent Full Course</title>
+  <title>Agent 101 — Full Course</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; }
-    body { background: #0B1120; }
+    body { background: #0B1120; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0F172A; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
@@ -691,6 +690,100 @@ Fix: Wrap each column in \`KeepInFrame(mode='shrink')\`
 
 **\`_extract_section\` returns empty** → Blank resume PDF
 Fix: Two-pass extraction — markdown headings first, bold-heading fallback second`
+      }
+    ]
+  }
+];
+
+  // ── T9 ─────────────────────────────────────────────────────────────────────
+  {
+    id: "T9", badge: "🧠", duration: "8 min",
+    title: "Memory & Intelligence Over Time",
+    sections: [
+      {
+        heading: "The Stateless Problem",
+        content: `Every LLM API call is stateless by default. The model has no memory of what happened last run, last week, or 100 runs ago. For a one-shot tool this is fine. For an agent used repeatedly, it creates four compounding gaps:
+
+**Gap 1 — No history:** Each call starts from zero.
+**Gap 2 — No cross-session persistence:** There's no record of past JDs, scores, or outcomes.
+**Gap 3 — No feedback loop:** You can tell the output is wrong, but the agent can't act on that signal.
+**Gap 4 — No learning from outcomes:** The same judgment calls are made on run 100 as on run 1.
+
+These aren't theoretical problems. They mean the agent can make the same mistake week after week, flag the same gaps without addressing them, and never develop a sense of what works for this specific user.`
+      },
+      {
+        heading: "The Two-Component Fix",
+        content: `The solution is a two-component memory layer that works without a database:
+
+**Component 1 — Persistent JSON store (memory.py)**
+A rolling window of the last 50 runs saved to \`memory/runs.json\`. Each entry stores: role targeted, ATS before/after scores, critical gaps, and a user rating (+1 / -1). The file is tiny (~4KB at 50 runs) and lives alongside the code.
+
+\`\`\`
+memory/runs.json
+[
+  { "id": "a3f2b1c4", "timestamp": "2026-04-22T...", "role": "Senior Data Analyst at Stripe",
+    "ats_before": 42, "ats_after": 84, "critical_gaps": ["Snowflake", "dbt"], "rating": 1 },
+  { "id": "9e1d5c88", ..., "rating": -1 }
+]
+\`\`\`
+
+**Component 2 — Memory Context Injection**
+Before every run, \`get_memory_context()\` reads the JSON and builds a structured block:
+
+\`\`\`
+## MEMORY CONTEXT — Resume Tailor Agent History
+- [2026-04-20] Senior Data Analyst at Stripe  |  ATS 42 → 84  ✅ User approved
+  ↳ Critical gaps: Snowflake, dbt
+- [2026-04-18] Product Analyst at Airbnb  |  ATS 38 → 71  ❌ User flagged
+  ↳ Critical gaps: SQL window functions, stakeholder alignment
+
+### Learned Patterns
+- Approved runs: 1  |  Avg ATS gain: +42 pts
+- Recurring unresolved gaps: SQL window functions, stakeholder alignment
+  → Address these more directly in bullet rewrites and the summary.
+\`\`\`
+
+This block is prepended to the system prompt. The orchestrator's Step 0 reads it and carries insights silently into Steps 1–5.`
+      },
+      {
+        heading: "How the Agent Uses Memory",
+        content: `The memory skill (Step 0) is advisory — it never overrides the actual JD or resume. It guides:
+
+**Style preference:** If approved runs had impact-first summaries, prefer that style unless the current JD clearly calls for something different.
+
+**Gap emphasis:** If "Snowflake" appears in 3 flagged runs' critical gaps, address it more directly this run — bridge it via transferable skills, surface it higher in the gap analysis.
+
+**ATS target:** If approved runs averaged +42 pts gain, that's the soft benchmark for this run.
+
+**What memory never does:**
+- Fabricate skills or experience not in the resume
+- Override what's actually in the current JD
+- Produce any visible output (Step 0 is silent)
+- Invent patterns not present in the actual run data
+
+This makes the memory layer safe by design. It shifts emphasis and style, not content.`
+      },
+      {
+        heading: "The Feedback Loop",
+        content: `After every run, a 👍 / 👎 widget appears below the download buttons. The user rates the quality of the output. The rating is stored against that run's ID in \`runs.json\`.
+
+The next run reads those ratings and adjusts:
+
+\`\`\`
+Run 1: Senior Data Analyst → 42 → 84 ✅
+Run 2: Product Analyst    → 38 → 71 ❌ (SQL gap not addressed well)
+Run 3: Data Scientist     → agent sees "recurring gap: SQL" → bridges it more directly
+\`\`\`
+
+This is not fine-tuning. The model weights don't change. What changes is the **context** the model receives before doing any work — which is often enough to meaningfully shift output quality.
+
+The general pattern (persist outcomes → inject as context → rate new output → repeat) applies to any agent you build where quality improves with iteration:
+
+\`\`\`
+Contract analyst   → flag clauses that were rejected → avoid same patterns next run
+Cold email agent   → track reply rates by hook type → favour highest-performing style
+Interview coach    → note questions user struggled with → drill those harder next session
+\`\`\``
       }
     ]
   }
@@ -1532,7 +1625,7 @@ Fix: Strengthen the constraint: "Before finalising, scan every bullet. If any bu
 
 **Architectural (half day each):**
 - Multi-turn: "make bullet 3 more technical" → Claude edits only that bullet
-- Resume storage: save past runs, show improvement over time
+- Memory layer: save past runs + feedback → agent improves over time ✅ (see Build L11)
 - Batch mode: upload 5 JDs, get 5 tailored resumes
 
 **The pattern you learned applies to ANY domain:**
@@ -1544,6 +1637,157 @@ Code reviewer      → context_loader → issue_identifier → fix_suggester
 \`\`\`
 
 Same pattern: skills + orchestrator + thin wrapper + deploy.`
+      }
+    ]
+  }
+];
+
+  // ── BUILD LESSON 11 ────────────────────────────────────────────────────────
+  {
+    id: 11, phase: 3, badge: "🧠", duration: "10 min",
+    title: "Add a Memory Layer",
+    objective: "Make the agent learn from past runs using persistent JSON storage and a 👍/👎 feedback loop.",
+    checklistItems: [
+      "memory.py created with save_run, save_feedback, get_memory_context",
+      "skills/memory_context.md created (Step 0 skill)",
+      "agents/resume_tailor_agent.md updated with Step 0",
+      "app.py wired: memory injected into prompt, runs saved, feedback buttons showing",
+    ],
+    sections: [
+      {
+        heading: "The Four Intelligence Gaps",
+        content: `Every API call is stateless. The agent has no memory of yesterday, last week, or 100 runs ago. This creates four gaps:
+
+**Gap 1:** No conversation history — each call starts at zero.
+**Gap 2:** No cross-session memory — no file, no record of past runs or scores.
+**Gap 3:** No feedback loop — you can tell the output is wrong, but the agent can't act on that.
+**Gap 4:** No learning from outcomes — same judgment calls on run 100 as run 1.
+
+The fix is a two-file memory layer: \`memory.py\` (persistence) + \`skills/memory_context.md\` (injection).`
+      },
+      {
+        heading: "memory.py — Persistent Run Storage",
+        content: `Create **memory.py** in the project root:
+
+\`\`\`python
+import json, uuid
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+
+MEMORY_DIR = Path(__file__).parent / "memory"
+RUNS_FILE  = MEMORY_DIR / "runs.json"
+MAX_RUNS   = 50   # FIFO rolling window
+
+def save_run(run_data: dict) -> str:
+    run_id = str(uuid.uuid4())[:8]
+    entry = {
+        "id": run_id,
+        "timestamp": datetime.now().isoformat(),
+        "role": run_data.get("role", "Unknown"),
+        "ats_before": run_data.get("ats_before"),
+        "ats_after":  run_data.get("ats_after"),
+        "critical_gaps": run_data.get("critical_gaps", []),
+        "rating": None,
+    }
+    runs = _load_runs()
+    runs.append(entry)
+    _save_runs(runs)
+    return run_id
+
+def save_feedback(run_id: str, rating: int):
+    runs = _load_runs()
+    for run in runs:
+        if run.get("id") == run_id:
+            run["rating"] = rating; break
+    _save_runs(runs)
+
+def get_memory_context(n: int = 6) -> str:
+    runs = _load_runs()
+    if not runs: return ""
+    rated = [r for r in runs if r.get("rating") is not None]
+    pool  = (rated if len(rated) >= 2 else runs)[-n:]
+    # builds and returns a structured MEMORY CONTEXT block
+    # (see memory.py for full implementation)
+\`\`\``
+      },
+      {
+        heading: "Step 0: The Memory Skill",
+        content: `Create **skills/memory_context.md**:
+
+\`\`\`markdown
+# Memory Context Skill
+
+## Role
+You are the Memory Analyst. Read the MEMORY CONTEXT block
+(if present at the top of the system prompt) and carry
+personalisation insights silently into Steps 1–5.
+
+## What to Extract
+- Approved runs (✅): ATS gain range, role patterns, bridged gaps
+- Flagged runs (❌): recurring unresolved gaps → address more directly
+- No rated runs: proceed neutrally, no personalisation
+
+## Output
+Do NOT produce any visible output.
+Memory is advisory — never override JD or resume content.
+Never fabricate patterns not present in the data.
+\`\`\`
+
+Then add **Step 0** to **agents/resume_tailor_agent.md** (before Step 1):
+
+\`\`\`markdown
+### Step 0: Load Memory Context (if available)
+Check whether a MEMORY CONTEXT block is present at the top of the system prompt.
+If YES → run the memory_context skill. Carry insights into Steps 1–5 silently.
+If NO memory context → skip entirely and proceed to Step 1.
+Never fabricate or invent memory.
+\`\`\``
+      },
+      {
+        heading: "Wiring It Into app.py",
+        content: `Three additions to **app.py**:
+
+**1 — Import:**
+\`\`\`python
+import memory as mem
+\`\`\`
+
+**2 — Inject memory before API call:**
+\`\`\`python
+base_system = load_prompts()          # @st.cache_data — static
+mem_context  = mem.get_memory_context()  # NOT cached — fresh each run
+system = (
+    mem_context + "\\n\\n---\\n\\n" + base_system
+    if mem_context else base_system
+)
+\`\`\`
+
+**3 — Save run + feedback buttons (after result):**
+\`\`\`python
+run_meta = mem.extract_run_metadata(result)
+run_id   = mem.save_run(run_meta)
+st.session_state["run_id"]     = run_id
+st.session_state["run_rating"] = None
+
+run_id, cur_rating = st.session_state.get("run_id"), st.session_state.get("run_rating")
+if cur_rating is None:
+    fb_up, fb_down, _ = st.columns([1, 1, 3])
+    with fb_up:
+        if st.button("👍  Yes"):
+            mem.save_feedback(run_id, 1)
+            st.session_state["run_rating"] = 1; st.rerun()
+    with fb_down:
+        if st.button("👎  No"):
+            mem.save_feedback(run_id, -1)
+            st.session_state["run_rating"] = -1; st.rerun()
+elif cur_rating == 1:
+    st.success("✅ Saved — future runs will build on this pattern.")
+else:
+    st.info("📝 Noted — future runs will adjust.")
+\`\`\`
+
+**Key design choice:** \`load_prompts()\` is cached (static files). \`get_memory_context()\` is NOT cached — it must see feedback from earlier runs in the same session.`
       }
     ]
   }
@@ -1562,6 +1806,7 @@ const quickRefCommands = [
   { label: "Push to GitHub",          cmd: "git remote add origin https://github.com/YOU/repo.git && git push -u origin main" },
   { label: "Debug section extraction",cmd: "st.write(_extract_section(result, 'TAILORED RESUME'))  # add temporarily" },
   { label: "Streamlit deploy",        cmd: "share.streamlit.io → New App → select repo → app.py → Deploy" },
+  { label: "Inspect memory runs",     cmd: "cat memory/runs.json  # view all saved runs and ratings" },
 ];
 
 const promptingPatterns = [
@@ -2263,8 +2508,8 @@ You are a [specific expert] who [specific action verb + goal].
     </div>
   );
 }
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<Agent101Course />);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Agent101Course />);
   </script>
 </body>
 </html>
