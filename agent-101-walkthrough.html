@@ -230,6 +230,126 @@ LLMs are trained to be helpful. "Helpful" sometimes means inferring things. Nega
 
   {
     id: 3, phase: 1,
+    title: "Write Skill 2: Gap Analyzer",
+    duration: "8 min",
+    objective: "Build the diagnostic layer — compare resume to JD and produce a structured match matrix.",
+    badge: "🔬",
+    checklistItems: [
+      "skills/gap_analyzer.md created",
+      "Match matrix uses MATCH / GAP / PARTIAL / TRANSFERABLE statuses",
+      "Critical Gaps section with reframe/growth/omit strategies",
+      "Keyword overlap score included",
+    ],
+    sections: [
+      {
+        heading: "Why Diagnosis Comes Before Treatment",
+        content: `Skill 2 sits between the JD parser and the bullet rewriter for a reason — you can't fix what you haven't measured.
+
+Without gap analysis, the bullet rewriter has no idea WHICH keywords to prioritize, which skills to surface, or which gaps to work around. With it, every rewrite decision is grounded in evidence.
+
+The analogy: Skill 1 is reading the job description. Skill 2 is reading the X-ray. Skill 3 is the surgery.
+
+**What Skill 2 produces:**
+
+\`\`\`
+MATCH       → Present in resume, matches JD requirement directly
+GAP         → Required by JD, not present in resume
+PARTIAL     → Related experience exists but undersold or differently framed
+TRANSFERABLE → Exists under different language — needs rewording, not new experience
+\`\`\`
+
+The TRANSFERABLE category is where most value is hidden. Candidates have 80% of what jobs need — they just don't surface it in the right language.`
+      },
+      {
+        heading: "Live Code: skills/gap_analyzer.md",
+        content: `Create \`skills/gap_analyzer.md\`:
+
+\`\`\`markdown
+# Gap Analyzer
+
+## Role
+You are a career strategist who identifies the gap between a candidate's
+current resume and a target job description. You think like a hiring manager:
+what would make you say "this person is a fit" vs. "close but missing X"?
+
+## Input
+1. Parsed JD (output from jd_parser.md)
+2. Current resume (full text)
+
+## Output Format
+
+### Match Matrix
+
+| Category | JD Requirement | Resume Evidence | Status |
+|----------|---------------|-----------------|--------|
+| Technical | Python 3+ yrs | "5 years of Python..." | MATCH |
+| Technical | Snowflake | Not mentioned | GAP |
+| Technical | SQL advanced | "Complex SQL queries..." | PARTIAL |
+| Domain | BFSI experience | "Worked at HDFC Bank..." | MATCH |
+| Soft | Stakeholder mgmt | "Presented to VP..." | TRANSFERABLE |
+
+Status values: MATCH / GAP / PARTIAL / TRANSFERABLE
+
+### Gap Summary
+- **Total requirements**: [N]
+- **Matched**: [N] ([%])
+- **Partial/Transferable**: [N] ([%])
+- **Gaps**: [N] ([%])
+
+### Critical Gaps (must address)
+List the top 3-5 gaps that would cause immediate rejection. For each, suggest:
+- Can it be reframed from existing experience? (REFRAME strategy)
+- Can it be mentioned as "currently learning"? (GROWTH strategy)
+- Should it be omitted entirely? (OMIT strategy)
+
+### Transferable Skills (hidden gold)
+Skills the resume has under different terminology that map to JD requirements.
+Example: JD says "stakeholder management" → Resume says "presented findings
+to senior leadership" → TRANSFERABLE with rewording.
+
+### Keyword Overlap Score
+- Keywords found in resume: [list]
+- Keywords missing from resume: [list]
+- Raw overlap: [X/Y] = [%]
+- Target after tailoring: 80%+
+
+## Constraints
+- Be honest about gaps — never fabricate experience
+- TRANSFERABLE requires a genuine connection, not a stretch
+- Gap summary percentages must be mathematically correct
+- Prioritise gaps by impact: missing required skill > missing preferred skill
+\`\`\`
+
+**Teach this line:** The TRANSFERABLE category. Every candidate undersells transferable skills because they don't recognise the language mapping. "Presented to senior leadership" IS stakeholder management — it just needs a 3-word relabel.`
+      },
+      {
+        heading: "The Principles Being Demonstrated",
+        content: `**Principle 1 — Structured Status Vocabulary**
+
+❌ "This skill seems to be present"
+✅ MATCH / GAP / PARTIAL / TRANSFERABLE
+
+Four statuses cover every possible case. The downstream bullet rewriter can act differently on each: MATCH → preserve, GAP → bridge or omit, PARTIAL → strengthen, TRANSFERABLE → reframe.
+
+---
+
+**Principle 2 — Strategy Per Gap**
+
+The gap analysis doesn't just say "you're missing Snowflake." It says: REFRAME (your Redshift experience is directly equivalent), GROWTH (add "currently completing Snowflake certification"), or OMIT (don't flag a gap you can't address).
+
+This is the skill knowing its place in a pipeline — it's not just diagnosing, it's arming the next skill with options.
+
+---
+
+**Principle 3 — Maths Forces Honesty**
+
+"Gap summary percentages must be mathematically correct" is a constraint that prevents the model from inflating the match score. Without it, Claude naturally wants to be encouraging. With it, you get a number you can trust.`
+      }
+    ]
+  },
+
+  {
+    id: 4, phase: 1,
     title: "Write Skill 3: Bullet Rewriter + STAR-K",
     duration: "10 min",
     objective: "Build the core skill — rewrite bullets with STAR-K and a self-check loop.",
@@ -344,7 +464,225 @@ With Step 3b: near-zero.
   },
 
   {
-    id: 4, phase: 1,
+    id: 5, phase: 1,
+    title: "Write Skill 4: Summary Generator",
+    duration: "7 min",
+    objective: "Generate 3 auto-scored summary variants and let the model recommend the best one.",
+    badge: "✍️",
+    checklistItems: [
+      "skills/summary_generator.md created",
+      "3 variant types defined (Technical, Impact, Domain)",
+      "Scoring rubric written (JD Alignment, Differentiation, ATS Density)",
+      "60-word cap + banned phrases constraint included",
+    ],
+    sections: [
+      {
+        heading: "Why 3 Variants Beat 1",
+        content: `Ask Claude "write a professional summary" and you get one attempt. Ask it to write 3 variants with different emphasis and then score all three — and you get a fundamentally different output.
+
+**The mechanism:**
+1. Claude writes 3 summaries, each optimised for a different dimension
+2. It then acts as its own judge — scoring each on JD Alignment, Differentiation, and ATS Density
+3. It recommends the highest scorer
+
+This pattern — generate variants, then evaluate — consistently produces better single outputs than just asking for the best one directly.
+
+**Why?** The evaluation step forces the model to reason about what "good" means in this context. That reasoning loop improves the final recommendation quality by giving it an explicit rubric to optimise against.`
+      },
+      {
+        heading: "Live Code: skills/summary_generator.md",
+        content: `Create \`skills/summary_generator.md\`:
+
+\`\`\`markdown
+# Professional Summary Generator
+
+## Role
+You are a recruiter who reads 200 resumes per day. You write professional
+summaries that make a hiring manager stop scrolling in 6 seconds.
+
+## Input
+1. Target role (from jd_parser)
+2. Rewritten experience bullets (from bullet_rewriter)
+3. Gap analysis (from gap_analyzer)
+4. Candidate's years of experience and key achievements
+
+## Output Format
+
+### Professional Summary (2-3 sentences, 40-60 words)
+
+Sentence 1: [Years] + [Domain] + [Core expertise] + [Scale signal]
+Sentence 2: [Specific achievement with number] + [Relevant tool/method]
+Sentence 3: [What you're looking for] + [Value you bring]
+
+### 3 Variants
+Generate 3 variants with different emphasis:
+- Variant A: Technical-heavy (leads with tools and methods)
+- Variant B: Impact-heavy (leads with business outcomes)
+- Variant C: Domain-heavy (leads with industry expertise)
+
+Score each on:
+- JD Alignment (1-5): How closely does it mirror the JD's language?
+- Differentiation (1-5): Would this stand out from 100 similar resumes?
+- ATS Density (1-5): How many JD keywords are naturally embedded?
+
+**Recommend the highest-scoring variant.**
+
+## Constraints
+- NEVER use: "results-driven", "self-motivated", "team player", "passionate"
+  → these are resume spam and get mentally filtered by recruiters
+- NEVER use objectives ("Seeking a role...") — summaries show value, not need
+- Must include at least 3 JD keywords from the ATS keyword list
+- Must include at least 1 quantified achievement
+- Maximum 60 words — recruiters scan, they don't read
+- Count words. If over 60, cut from Sentence 2. Never cut the quantified achievement.
+\`\`\`
+
+**Teach the banned phrases list.** "Results-driven professional" appears in literally millions of resumes. ATS systems still pass it but recruiters skip it on sight. The constraint banning it forces the model to find specific, differentiated language instead.`
+      },
+      {
+        heading: "The Self-Scoring Pattern",
+        content: `The summary generator uses a pattern worth extracting: **generate → score → recommend**.
+
+\`\`\`
+Standard prompt:  "Write a professional summary"
+                  → 1 output, unknown quality, no basis for comparison
+
+Self-scoring:     "Write 3 variants. Score each on [rubric]. Recommend the highest."
+                  → 3 outputs, explicit scoring, model explains its recommendation
+\`\`\`
+
+**Why this works:**
+The model can't easily optimise for a vague goal. Give it a rubric and it has something concrete to measure against. The act of scoring forces it to reason about what each variant does well or poorly.
+
+**Where to apply this pattern:**
+- Any time you need a judgment call (which tone? which framing? which approach?)
+- Any time you'd otherwise ask "what's the best X?" without giving criteria
+- Any time you'd regenerate until satisfied — instead, ask for variants and a recommendation
+
+The model's recommendation isn't always perfect. But it narrows your choice from infinite to three, and gives you its reasoning.`
+      }
+    ]
+  },
+
+  {
+    id: 6, phase: 1,
+    title: "Write Skill 5: ATS Scorer",
+    duration: "7 min",
+    objective: "Build a deterministic before/after scorecard that shows exactly why the tailored resume scores higher.",
+    badge: "📊",
+    checklistItems: [
+      "skills/ats_scorer.md created",
+      "Scoring formula written explicitly (0.5/0.2/0.15/0.15 weights)",
+      "Before/after comparison required in output",
+      "Formatting flags checklist included",
+    ],
+    sections: [
+      {
+        heading: "The ATS Scoring Formula",
+        content: `ATS systems don't score resumes the way humans do. They scan for keyword presence, parse section structure, and check formatting compliance. The score is mechanical — not holistic.
+
+Our scorer mirrors this:
+
+\`\`\`
+Overall ATS Score =
+  (Keyword Match %)   × 0.50   ← biggest lever: exact keyword strings
+  (Skills Section Match) × 0.20   ← explicit skill tags vs. JD skills
+  (Summary Alignment) × 0.15   ← does the summary echo JD language?
+  (Formatting Score)  × 0.15   ← .docx vs pdf, standard headers, no tables
+                                ─────────────────────────────────────────
+                              = /100
+\`\`\`
+
+**Why 50% on keywords?**
+ATS systems are predominantly keyword-matching engines. Everything else is a tie-breaker. If your resume doesn't contain the string "Snowflake" and the JD requires Snowflake — you're filtered out regardless of how qualified you are.
+
+The formula is also transparent by design: the model must show its working. "Keyword match: 14/20 keywords = 70% × 0.5 = 35 pts". This is checkable.`
+      },
+      {
+        heading: "Live Code: skills/ats_scorer.md",
+        content: `Create \`skills/ats_scorer.md\`:
+
+\`\`\`markdown
+# ATS Compatibility Scorer
+
+## Role
+You are an ATS engineer who scores resumes for keyword match, formatting
+compliance, and overall parsability. You think like Greenhouse, Lever,
+and Workday's parsing algorithms.
+
+## Input
+1. Original resume (before tailoring)
+2. Tailored resume (after all previous skills)
+3. Parsed JD with ATS keywords (from jd_parser)
+
+## Output Format
+
+### ATS Scorecard
+
+| Dimension | Original | Tailored | Target |
+|-----------|----------|----------|--------|
+| Keyword Match (%) | [X%] | [Y%] | 80%+ |
+| Skills Section Match | [X/Y] | [X/Y] | 90%+ |
+| Summary Alignment | Low/Med/High | High | High |
+| Formatting Score | [X/10] | [X/10] | 8+ |
+| Overall ATS Score | [X/100] | [Y/100] | 75+ |
+
+### Keyword Audit
+- Keywords present in tailored resume: [list with occurrence count]
+- Keywords still missing: [list with recommendation for each]
+- Over-used keywords (>3 times): [list — reduce to avoid stuffing]
+
+### Formatting Check
+- [ ] No tables or columns in submission copy (.docx — not the visual PDF)
+- [ ] No headers/footers (ATS ignores them)
+- [ ] No images or icons (ATS can't read them)
+- [ ] Standard section headers: "Experience", "Education", "Skills"
+- [ ] Dates in MM/YYYY format (most parseable)
+- [ ] File format: .docx preferred over .pdf for ATS submission
+
+### Impact & Repetition Check
+Count bullets missing a quantified metric. Report: "X of Y bullets lack
+quantified impact." List any action verb used more than once as an opener.
+
+### Final Recommendations
+Top 3 changes to make before submitting:
+1. [Most impactful]
+2. [Second most impactful]
+3. [Quick win]
+
+## Constraints
+- Scoring is deterministic: same inputs = same score
+- Keyword match % = (keywords found / total JD keywords) × 100
+- Overall = (keyword% × 0.5) + (skills% × 0.2) + (summary × 0.15) + (format × 0.15)
+- Show your calculation — the number must be traceable
+- Never claim 100% — even perfect resumes rarely exceed 92%
+\`\`\``
+      },
+      {
+        heading: "The Principles Being Demonstrated",
+        content: `**Principle 1 — Show Your Calculation**
+
+"Show your calculation: (0.5 × keyword%) + (0.2 × skills%) + ... = total" is not just a formatting request. It's a verification mechanism. If the math doesn't add up, the score is wrong. Making the model show its working makes it easier to catch and correct errors.
+
+This is especially important in agent pipelines where outputs feed the next step — a wrong score here misleads the user's entire decision about whether to apply.
+
+---
+
+**Principle 2 — Before/After Is the Proof**
+
+Showing only the tailored score is marketing. Showing before AND after is evidence. The ATS scorer is the only place in the whole pipeline where the original resume appears again — which makes the delta visible and credible.
+
+---
+
+**Principle 3 — Deterministic Constraints Enable Reproducibility**
+
+"Same inputs = same score" — this constraint forces a specific algorithm instead of a judgment call. Without it, the model might score differently based on subtle prompt variations. With it, the score is comparable across runs, which is what makes the memory layer's "avg ATS gain +38 pts" meaningful.`
+      }
+    ]
+  },
+
+  {
+    id: 7, phase: 1,
     title: "The Orchestrator",
     duration: "10 min",
     objective: "Chain all 5 skills and define the output contract for app.py to parse.",
@@ -480,7 +818,7 @@ If the orchestrator outputs \`## 1. Tailored Resume\` (lowercase, ## instead of 
 
   // ── PHASE 2: CODE ─────────────────────────────────────────────────────────
   {
-    id: 5, phase: 2,
+    id: 8, phase: 2,
     title: "app.py — Skeleton & Prompt Loader",
     duration: "8 min",
     objective: "Build the Streamlit skeleton and load all 6 prompt files into one system prompt.",
@@ -589,7 +927,7 @@ For this use case, Option B wins. The orchestrator is explicit about the order a
   },
 
   {
-    id: 6, phase: 2,
+    id: 9, phase: 2,
     title: "app.py — API Call & Output Parser",
     duration: "8 min",
     objective: "Make the API call and split the output into two separate content streams.",
@@ -737,7 +1075,7 @@ if "result" in st.session_state:
   },
 
   {
-    id: 7, phase: 2,
+    id: 10, phase: 2,
     title: "app.py — PDF Generation",
     duration: "7 min",
     objective: "Generate two visually distinct PDFs with ReportLab.",
@@ -831,7 +1169,7 @@ body = Table([[kif_left, kif_right]], colWidths=[LW, RW])
 
   // ── PHASE 3: SHIP ─────────────────────────────────────────────────────────
   {
-    id: 8, phase: 3,
+    id: 11, phase: 3,
     title: "Push to GitHub",
     duration: "5 min",
     objective: "Get the code into a GitHub repo so Streamlit Cloud can find it.",
@@ -891,7 +1229,7 @@ You don't write any secret-reading code. \`anthropic.Anthropic()\` handles it.`
   },
 
   {
-    id: 9, phase: 3,
+    id: 12, phase: 3,
     title: "Deploy to Streamlit Cloud",
     duration: "5 min",
     objective: "Make the app live at a public URL anyone can use.",
@@ -968,7 +1306,7 @@ This URL is now shareable. Put it in your LinkedIn Featured section. Everyone yo
   },
 
   {
-    id: 10, phase: 3,
+    id: 13, phase: 3,
     title: "Debug, Iterate, and Extend",
     duration: "5 min",
     objective: "Know how to debug prompt issues and where to take the agent next.",
@@ -1029,7 +1367,7 @@ Fix: The constraint is already in bullet_rewriter.md. If it's still happening, s
 
 **Architectural extensions (half day each):**
 - Multi-turn conversation: "make bullet 3 more technical" → Claude edits only that bullet
-- Memory layer: save past runs + feedback → agent improves over time ✅ (see Lesson 11)
+- Memory layer: save past runs + feedback → agent improves over time ✅ (see Lesson 14)
 - Batch mode: upload 5 JDs, get 5 tailored resumes at once
 
 **The agent design pattern you just learned applies to ANY domain:**
@@ -1048,7 +1386,7 @@ Same pattern: skills + orchestrator + thin wrapper + deploy. The only thing that
 
   // ── LESSON 11 ─────────────────────────────────────────────────────────────
   {
-    id: 11, phase: 3,
+    id: 14, phase: 3,
     title: "Add a Memory Layer",
     duration: "10 min",
     objective: "Make the agent learn from past runs using persistent JSON storage and a feedback loop.",
