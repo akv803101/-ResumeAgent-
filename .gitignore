@@ -38,3 +38,16 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Dev / course files (kept locally, not needed in repo)
+agent-101-walkthrough.jsx
+agent-101-course.jsx
+agent-101-course.html
+Agent-101-Teaching-Guide.md
+publish_to_github.sh
+test_pdfs.py
+skill/
+temp_*.txt
+
+# Memory runs (user-specific, auto-generated)
+memory/
