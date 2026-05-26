@@ -5,6 +5,7 @@
 ### AI-powered resume tailoring that turns a generic CV into an ATS-optimized application — in under 30 seconds.
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Multi-Model](https://img.shields.io/badge/LiteLLM-Multi--Model-7C3AED?style=for-the-badge)](https://github.com/BerriAI/litellm)
 [![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6-D97706?style=for-the-badge&logo=anthropic&logoColor=white)](https://www.anthropic.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF_Export-2D9CDB?style=for-the-badge)](https://www.reportlab.com/)
@@ -122,7 +123,8 @@ resume-tailor-agent/
 
 ### Prerequisites
 - Python 3.9+
-- [Anthropic API key](https://console.anthropic.com) (~$0.03/run on Sonnet)
+- An API key from **any supported provider** (Anthropic, Groq (free), OpenAI, Gemini, or Ollama for fully local)
+  - See [🤖 Multi-Model Support](#-multi-model-support) for the full list
 
 ### Option A — Streamlit Web App (Recommended)
 
@@ -132,14 +134,13 @@ git clone https://github.com/akv803101/resume-tailor-agent.git
 cd resume-tailor-agent
 
 # 2. Install dependencies
-pip install streamlit anthropic reportlab
+pip install -r requirements.txt
 
-# 3. Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# 4. Run
+# 3. Run
 streamlit run app.py
 ```
+
+Pick a model from the sidebar and paste your API key — no env vars required.
 
 Open **http://localhost:8501**, paste a JD + resume, and hit **Tailor My Resume**.
 
@@ -152,11 +153,64 @@ Two download buttons appear in the left column:
 ### Option B — CLI Script
 
 ```bash
-pip install anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
+pip install -r requirements.txt
+
+# Choose any LiteLLM-supported model (defaults to anthropic/claude-sonnet-4-6)
+export LLM_MODEL="groq/llama-3.3-70b-versatile"
+export GROQ_API_KEY=gsk_...
+
+# Or use Anthropic:
+# export LLM_MODEL="anthropic/claude-sonnet-4-6"
+# export ANTHROPIC_API_KEY=sk-ant-...
 
 python resume_agent.py examples/sample_jd.txt examples/sample_resume.txt
 # → saves to output/tailored_report.md
+```
+
+---
+
+## 🤖 Multi-Model Support
+
+The app is **provider-agnostic** via [LiteLLM](https://github.com/BerriAI/litellm). Pick any supported model from the Streamlit sidebar — paste your API key — done. The architecture, skills, and orchestration are unchanged; only the model call is abstracted.
+
+### Supported Providers (out of the box)
+
+| Provider | Example Model | Free Tier? | Quality vs Claude | Notes |
+|----------|---------------|-----------|-------------------|-------|
+| **Anthropic** | `anthropic/claude-sonnet-4-6` | ❌ paid | **100% (baseline)** | Prompts were tuned for this model |
+| **Groq** | `groq/llama-3.3-70b-versatile` | ✅ free | ~85-90% | Blazing fast (~500 tok/s), 30 req/min limit on free tier |
+| **Groq** | `groq/mixtral-8x7b-32768` | ✅ free | ~70% | Long context, weaker on structured output |
+| **OpenAI** | `openai/gpt-4o` | ❌ paid | ~90-95% | Very reliable structure |
+| **OpenAI** | `openai/gpt-4o-mini` | ❌ paid | ~80% | Cheapest paid option |
+| **Gemini** | `gemini/gemini-1.5-pro` | ✅ limited | ~80% | May add preamble that affects PDF parsing |
+| **Ollama** | `ollama/llama3.1` | ✅ fully local | ~50-60% (8B) | Set Ollama base URL in sidebar; needs `ollama serve` running |
+
+> **Add any other LiteLLM-supported model** by editing the dropdown list in `app.py`. See the full list at [docs.litellm.ai/docs/providers](https://docs.litellm.ai/docs/providers).
+
+### How model choice affects output
+
+The skills (`skills/*.md`) and orchestrator (`agents/resume_tailor_agent.md`) are **plain markdown prompts** — every model receives the exact same instructions. But not every model follows them equally well:
+
+- ✅ **Claude / GPT-4o / Llama 3.3 70B** — section markers, STAR-K bullet format, ATS scoring table all reliable
+- ⚠️ **Smaller models (Llama 8B, Mixtral)** — may rename section headers (e.g., `**Tailored Resume:**` instead of `## Tailored Resume`), which can break the PDF generator's section parser
+- ⚠️ **Gemini** — sometimes prepends conversational text ("Here is the tailored resume...") before the actual output
+
+**Recommendation:**
+- Production / final resume → Claude Sonnet 4.6 or GPT-4o
+- Free development / dogfooding → Groq Llama 3.3 70B (best free-tier quality)
+- Offline / privacy-sensitive → Ollama with `llama3.1:70b` (requires ~40GB RAM)
+
+### Using Ollama (fully local, $0 cost)
+
+```bash
+# 1. Install Ollama: https://ollama.com
+ollama pull llama3.1
+ollama serve
+
+# 2. In the Streamlit sidebar:
+#    - Model: ollama/llama3.1
+#    - API Key: leave blank
+#    - Ollama base URL: http://localhost:11434
 ```
 
 ---
@@ -242,15 +296,15 @@ The agent **never fabricates experience**. Constraints baked into every skill:
 
 ## 💰 Cost & API
 
-| Item | Detail |
-|------|--------|
-| Model | `claude-sonnet-4-6` |
-| Input tokens | ~4,000 per run |
-| Output tokens | ~3,000 per run |
-| Cost per run | **~$0.03** |
-| 100 runs/month | **~$3.00** |
+| Provider | Cost per run | 100 runs/month | Where to get a key |
+|----------|-------------|----------------|--------------------|
+| Anthropic `claude-sonnet-4-6` | **~$0.03** | ~$3.00 | [console.anthropic.com](https://console.anthropic.com) |
+| Groq `llama-3.3-70b-versatile` | **Free** (rate-limited) | Free | [console.groq.com](https://console.groq.com) |
+| OpenAI `gpt-4o-mini` | ~$0.005 | ~$0.50 | [platform.openai.com](https://platform.openai.com) |
+| OpenAI `gpt-4o` | ~$0.05 | ~$5.00 | [platform.openai.com](https://platform.openai.com) |
+| Ollama (any local model) | **$0** | **$0** | [ollama.com](https://ollama.com) |
 
-Get your API key: [console.anthropic.com](https://console.anthropic.com)
+Token usage: ~4,000 input + ~3,000 output per run.
 
 ---
 
@@ -268,7 +322,7 @@ Get your API key: [console.anthropic.com](https://console.anthropic.com)
 
 | Layer | Technology |
 |-------|-----------|
-| AI / LLM | Anthropic Claude Sonnet 4.6 |
+| AI / LLM | Any model via [LiteLLM](https://github.com/BerriAI/litellm) (Anthropic, Groq, OpenAI, Gemini, Ollama) |
 | Web UI | Streamlit |
 | PDF Generation | ReportLab |
 | Language | Python 3.9+ |

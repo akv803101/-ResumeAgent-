@@ -1,6 +1,6 @@
 # resume_agent.py — CLI Runner
 
-import anthropic
+import litellm
 import sys
 import os
 
@@ -17,21 +17,22 @@ def load_system_prompt():
 
 def tailor_resume(jd_text: str, resume_text: str) -> str:
     """Run the full Resume Tailor Agent pipeline."""
-    client = anthropic.Anthropic()
-
     user_input = f"""## Job Description
 {jd_text}
 
 ## My Current Resume
 {resume_text}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
+    model = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-6")
+    response = litellm.completion(
+        model=model,
         max_tokens=6000,
-        system=load_system_prompt(),
-        messages=[{"role": "user", "content": user_input}]
+        messages=[
+            {"role": "system", "content": load_system_prompt()},
+            {"role": "user", "content": user_input},
+        ],
     )
-    return response.content[0].text
+    return response.choices[0].message.content
 
 if __name__ == "__main__":
     jd = open(sys.argv[1]).read() if len(sys.argv) > 1 else input("Paste JD:\n")

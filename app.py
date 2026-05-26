@@ -1,7 +1,7 @@
 # app.py — Resume Tailor Agent UI
 
 import streamlit as st
-import anthropic
+import litellm
 import io
 import re
 from datetime import date
@@ -657,6 +657,28 @@ def generate_resume_pdf(resume_section: str, target_role: str = "") -> bytes:
 st.markdown('<div class="main-header">📄 Resume Tailor Agent</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Paste a LinkedIn JD + your resume → get an ATS-optimised tailored resume + full report as PDF</div>', unsafe_allow_html=True)
 
+# ── Model selector (LiteLLM) ──────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### 🤖 Model")
+    model = st.selectbox(
+        "Provider / Model",
+        [
+            "anthropic/claude-sonnet-4-6",
+            "groq/llama-3.3-70b-versatile",
+            "groq/llama-3.1-8b-instant",
+            "groq/mixtral-8x7b-32768",
+            "ollama/llama3.1",
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "gemini/gemini-1.5-pro",
+        ],
+        index=0,
+    )
+    api_key = st.text_input("API Key", type="password", help="Leave blank for Ollama (local)")
+    api_base = None
+    if model.startswith("ollama/"):
+        api_base = st.text_input("Ollama base URL", value="http://localhost:11434")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -692,17 +714,20 @@ if run:
                     if mem_context else base_system
                 )
 
-                client = anthropic.Anthropic()
-                msg = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=6000,
-                    system=system,
-                    messages=[{
-                        "role": "user",
-                        "content": f"## Job Description\n{jd}\n\n## My Current Resume\n{resume}"
-                    }]
-                )
-                result = msg.content[0].text
+                completion_kwargs = {
+                    "model": model,
+                    "max_tokens": 6000,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": f"## Job Description\n{jd}\n\n## My Current Resume\n{resume}"},
+                    ],
+                }
+                if api_key:
+                    completion_kwargs["api_key"] = api_key
+                if api_base:
+                    completion_kwargs["api_base"] = api_base
+                msg = litellm.completion(**completion_kwargs)
+                result = msg.choices[0].message.content
                 st.session_state["result"]     = result
                 st.session_state["jd_snippet"] = jd[:80]
 
